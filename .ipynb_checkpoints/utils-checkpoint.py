@@ -15,6 +15,9 @@ def global_w_mean(ds, variable):
     """Takes the globally weighted mean of a dataset and its variable, as long as the dataset has a dz and area"""
     return (ds[variable].weighted(ds['AREA']*ds['dz']).mean(dim = ['lat','lon','lev']))
 
+def global_sfc_w_mean(ds, variable):
+    return (ds[variable].isel(lev = 0).weighted(ds['AREA']*ds['dz'].isel(lev = 0)).mean(dim = ['lat','lon']))
+
 def f_(raw_f, t_p): 
     """Select our forcing at time tp"""
     return raw_f.interp({'time':t_p})
@@ -24,7 +27,7 @@ def G_(GC_out, t, t_p, f_0, Δt):
     'where G(t-t_p) such that t-t_p = s), if s<0, the function goes to 0'
     s = t-t_p
     if t>t_p:
-        G = GC_out.interp({'time':s})/(Δt*f_0) #divide by our original f0 and our dt in order to get into units of concentration
+        G = GC_out.interp({'time':s})/(Δt*f_0.interp({'time':s})) #divide by our original f0 and our dt in order to get into units of concentration
     elif t_p>=t:
         G = xr.zeros_like(GC_out.interp({'time':s})) #np.nan
         
@@ -38,3 +41,14 @@ def G_f_kernel(raw_G, raw_f, t, t_p, Δt, dt, f_0, ds_output = True):
     else:
         return(G_(raw_G, t, t_p, f_0, Δt).values*f_(raw_f, t_p).values*dt)
     
+def calc_δc_δt(ds_delta, ds_base, conc_species):
+    ds_delta['conc_dif'] = (global_w_mean(ds_delta, conc_species)- 
+                            global_w_mean(ds_base, conc_species))
+    δc_δt = ds_delta['conc_dif'].diff('time')
+    return(δc_δt)
+
+def calc_δc_δt_global(ds_delta, ds_base, conc_species):
+    ds_delta['conc_dif'] = (ds_delta[conc_species]- 
+                            ds_base[conc_species])
+    δc_δt = ds_delta['conc_dif'].diff('time')
+    return(δc_δt)
