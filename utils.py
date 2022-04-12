@@ -13,10 +13,10 @@ def combine_BC(ds):
     
 def global_w_mean(ds, variable):
     """Takes the globally weighted mean of a dataset and its variable, as long as the dataset has a dz and area"""
-    return (ds[variable].weighted(ds['AREA']*ds['dz']).mean(dim = ['lat','lon','lev']))
+    return (ds[variable].weighted(ds['area']*ds['dz']).mean(dim = ['lat','lon','lev']))
 
 def global_sfc_w_mean(ds, variable):
-    return (ds[variable].isel(lev = 0).weighted(ds['AREA']*ds['dz'].isel(lev = 0)).mean(dim = ['lat','lon']))
+    return (ds[variable].isel(lev = 0).weighted(ds['area']*ds['dz'].isel(lev = 0)).mean(dim = ['lat','lon']))
 
 def f_(raw_f, t_p): 
     """Select our forcing at time tp"""

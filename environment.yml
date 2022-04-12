@@ -1,0 +1,30 @@
+name: irf_gchp
+channels:
+  - conda-forge
+dependencies:
+  - pip
+    - git+https://github.com/LiamBindle/sparselt.git 
+  - cdo
+  #- xlrd
+  - esmpy
+  - xgcm
+  - dask
+  - python
+  - jupyter
+  - jupyterlab
+  - xarray
+  - numpy
+  - pandas
+  - matplotlib
+  #- rasterio
+ # - gdal
+  - seaborn
+  - cartopy
+  - scipy
+  - netCDF4
+  - regionmask
+ # - geopandas
+ # - zarr
+ # - xesmf
+ # - nc-time-axis
+
