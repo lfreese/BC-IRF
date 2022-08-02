@@ -2,6 +2,16 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import numpy as np
 import dask
+import pandas as pd
+
+################ Dicts #############
+names_dict = {'SEA':'Southeast Asia', 'Indo':'Indonesia', 'Malay':'Malaysia', 'Viet':'Vietnam', 'Cambod':'Cambodia', 
+              'all_countries':'All Countries, Stepped', 
+              'SEA_2x':'Southeast Asia Doubled', 'Indo_2x':'Indonesia Doubled', 
+              'Malay_2x':'Malaysia Doubled', 'Viet_2x':'Vietnam Doubled', 'Cambod_2x':'Cambodia Doubled', 
+              'all_countries_2x':'All Countries, Stepped Doubled'}
+
+
 
 ################ General functions ################
 def combine_BC(ds):
@@ -27,6 +37,13 @@ def global_w_mean(ds, variable):
 def global_sfc_w_mean(ds, variable):
     return (ds[variable].isel(lev = 0).weighted(ds['area']*ds['dz'].isel(lev = 0)).mean(dim = ['lat','lon']))
 
+def fix_area_ij_latlon(ds):
+    ds_area = ds['area']
+    ds_area = ds_area.rename({'i':'lat','j':'lon'})
+    ds_area['i']= ds['lat']
+    ds_area['j'] = ds['lon']
+    ds['area'] = ds_area.drop(['j','i'])
+    return(ds)
 
 ############## Green's function calculation ################
 
@@ -49,18 +66,35 @@ def G_f_kernel(raw_G, raw_f, t, t_p, Δt, dt, f_0, ds_output = True):
     else:
         return(G_(raw_G, t, t_p, f_0, Δt).values*f_(raw_f, t_p).values*dt)
 
+    
+def switch_conc_time(ds):
+    ds['time'] = ds['time'] + np.timedelta64(12,'h')
+    
+    
 #### Derivative for the pulse vs. base ####
 #doing a sustained pulse, not single day pulse
-def calc_δc_δt_mean(ds, conc_species):
-    ds['conc_dif'] = (global_w_mean(ds.sel(run = 'delta').fillna(0), conc_species)- 
-                            global_w_mean(ds.sel(run = 'base').fillna(0), conc_species))
-    δc_δt = ds['conc_dif'].diff('time').fillna(0)
+def calc_δc_δt_mean(ds, conc_species, run_delta_name, run_base_name):
+    '''take the backwards time difference for the concentration, adding in a 0th timestep with delta_c = 0 '''
+    ds['conc_dif'] = (global_w_mean(ds.sel(run = run_delta_name).fillna(0), conc_species)- 
+                            global_w_mean(ds.sel(run = run_base_name).fillna(0), conc_species))
+    time = pd.date_range((ds['time'][0]- np.timedelta64(24,'h')).values, freq='H', periods=1)
+    ds_0 = xr.Dataset({'conc_dif': ('time', [0]), 'time': time})
+    ds = xr.concat([ds_0,ds], dim = 'time')
+    
+    δc_δt = ds['conc_dif'].diff('time').fillna(0)/(ds['time'].diff('time')/(24*60*60*1e9)).astype('float64')
     return(δc_δt)
 
-def calc_δc_δt(ds, conc_species):
-    ds['conc_dif'] = (ds.sel(run = 'delta')[conc_species]- 
-                            ds.sel(run = 'base')[conc_species])
-    δc_δt = ds['conc_dif'].diff('time')
+def calc_δc_δt(ds, conc_species, run_delta_name, run_base_name):
+    ds['conc_dif'] = (ds.sel(run = run_delta_name)[conc_species]- 
+                            ds.sel(run = run_base_name)[conc_species])
+    time = pd.date_range((ds['time'][0]- np.timedelta64(24,'h')).values, freq='H', periods=1)
+    ds_0 = xr.Dataset(data_vars = dict(conc_dif = (['time','lat','lon'], np.zeros([1,len(ds['lat']),len(ds['lon'])]))), coords = dict(
+            time = time, 
+            lat = ds['lat'], lon = ds['lon']))
+
+    ds = xr.concat([ds_0,ds], dim = 'time')
+    δc_δt = ds['conc_dif'].diff('time').fillna(0)/(ds['time'].diff('time')/(24*60*60*1e9)).astype('float64')
+
     return(δc_δt)
 
 #### forcing to divide out ####
@@ -81,13 +115,17 @@ def f_(raw_f, t_p):
    # return C
 
 
-def convolve_global_mean(G, E):
+def convolve_global_mean(G, E, dt):
     '''convolves a global mean G with an emissions scenario of any length'''
+    
     E_len = len(E)
+    #print(E_len)
     G_len = len(G.s)
     C = np.zeros((E_len+G_len)) 
     for i, tp in enumerate(np.arange(0,E_len)):
-        C[i+1:i+G_len+1] += G*E[i] #C.loc slice or where
+        #print(E[i].values)
+        C[i:i+G_len] += G*E[i]*dt #C.loc slice or where
+        plt.plot(C)
     C = xr.DataArray(
     data = C,
     dims = ['s'],
@@ -116,13 +154,13 @@ def convolve_single_lev_testing(G, E, E_len, G_len):
         C.loc[dict(s = slice(i,i + G_len))] = C.loc[dict(s = slice(i,i + G_len))]+ G*E[i]
     return C
 
-def convolve_single_lev(G, E):
+def convolve_single_lev(G, E, dt):
     '''convolves a spatially resolved G that is mean or single level with an emissions scenario of any length'''
     E_len = len(E)
     G_len = len(G.s)
     C = np.zeros(((E_len+G_len), len(G.lat), len(G.lon))) 
     for i, tp in enumerate(np.arange(0,E_len)):
-        C[i:i+G_len] += G*E[i] #C.loc slice or where
+        C[i:i+G_len] += G*E[i]*dt #C.loc slice or where
     C = xr.DataArray(
     data = C,
     dims = ['s','lat','lon'],
