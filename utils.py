@@ -115,17 +115,17 @@ def f_(raw_f, t_p):
    # return C
 
 
-def convolve_global_mean(G, E, dt):
+def convolve_global_mean(G, E, dt, time_dim):
     '''convolves a global mean G with an emissions scenario of any length'''
     
     E_len = len(E)
     #print(E_len)
-    G_len = len(G.s)
+    G_len = len(G[time_dim])
     C = np.zeros((E_len+G_len)) 
     for i, tp in enumerate(np.arange(0,E_len)):
         #print(E[i].values)
         C[i:i+G_len] += G*E[i]*dt #C.loc slice or where
-        plt.plot(C)
+        #plt.plot(C)
     C = xr.DataArray(
     data = C,
     dims = ['s'],
@@ -136,7 +136,7 @@ def convolve_global_mean(G, E, dt):
     return C
 
 #### single lev convolution ####
-def convolve_single_lev_testing(G, E, E_len, G_len):
+def convolve_single_lev_testing(G, E, E_len, G_len): ##testing to see if we can get it with dask and xarary
     '''convolves a spatially resolved G that is mean or single level with an emissions scenario of any length'''
     #C = np.zeros(((E_len+G_len), len(G.lat), len(G.lon))) #xarray the shape of tthe output I want dask.zeros as the input to xarray
     C = xr.DataArray(
