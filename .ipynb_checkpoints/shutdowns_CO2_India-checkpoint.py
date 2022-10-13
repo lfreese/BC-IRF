@@ -214,7 +214,7 @@ print('G prepped')
 
 
 country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_110
-countries = ['India','China','Indonesia','Malaysia','Vietnam','Australia', 'Cambodia','Myanmar', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan']
+countries = ['China','India','Indonesia','Malaysia','Vietnam','Australia', 'Cambodia','Myanmar', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan']
 print('countries uploaded')
 
 

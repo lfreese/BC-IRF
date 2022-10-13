@@ -1,7 +1,8 @@
 #!/home/emfreese/anaconda3/envs/gchp/bin/python
-#SBATCH --time=00:10:00
+#SBATCH --time=01:10:00
 #SBATCH --mem=MaxMemPerNode
 #SBATCH --cpus-per-task=2
+#SBATCH --partition=edr
 
 import os
 
@@ -50,20 +51,24 @@ regrid_path = "/net/fs11/d0/emfreese/GCrundirs/IRF_runs/regrid_files/"
 weights_file = f"esmf_regrid_weights_c{cube_res}_s2_11_112_to_latlon{lat}x{lon}.nc"#f"esmf_regrid_weights_c{cube_res}_to_latlon{lat}x{lon}.nc"
 reg_latlon = f"regular_lat_lon_{lat}x{lon}.nc"
 
+
 #select date ranges
-if month == 1 or 3 or 5 or 7 or 8 or 10 or 12:
-    dates = np.arange(1,29)
+if month == 1 or month == 3 or month == 5 or month == 7 or month == 8 or month == 10 or month == 12:
+    dates = np.arange(1,6)
+
 elif month == 2:
     dates = np.arange(1, 28)
+    
 else:
     dates = np.arange(1,31)
+print(dates)
 
 filenames = [
-    f"GEOSChem.SpeciesConc.20160{month}{str(date).zfill(2)}_0000z.nc4" for date in dates
+    f"GEOSChem.SpeciesConc.2016{str(month).zfill(2)}{str(date).zfill(2)}_0000z.nc4" for date in dates
 ] + [
-    f"GEOSChem.AerosolMass.20160{month}{str(date).zfill(2)}_0000z.nc4" for date in dates
+    f"GEOSChem.AerosolMass.2016{str(month).zfill(2)}{str(date).zfill(2)}_0000z.nc4" for date in dates
 ]+ [
-    f"GEOSChem.Emissions.20160{month}{str(date).zfill(2)}_0000z.nc4" for date in dates
+    f"GEOSChem.Emissions.2016{str(month).zfill(2)}{str(date).zfill(2)}_0000z.nc4" for date in dates
 ]
 
 
