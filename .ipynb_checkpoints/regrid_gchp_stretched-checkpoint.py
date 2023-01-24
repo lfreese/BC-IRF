@@ -1,8 +1,7 @@
 #!/home/emfreese/anaconda3/envs/gchp/bin/python
 #SBATCH --time=01:10:00
-#SBATCH --mem=MaxMemPerNode
 #SBATCH --cpus-per-task=2
-#SBATCH --partition=edr
+#SBATCH --partition=fdr
 
 import os
 
@@ -54,13 +53,29 @@ reg_latlon = f"regular_lat_lon_{lat}x{lon}.nc"
 
 #select date ranges
 if month == 1 or month == 3 or month == 5 or month == 7 or month == 8 or month == 10 or month == 12:
-    dates = np.arange(1,6)
+    dates = np.arange(1,32)
 
 elif month == 2:
-    dates = np.arange(1, 28)
+    dates = np.arange(1, 30)
     
 else:
     dates = np.arange(1,31)
+print(dates)
+
+
+# #select date ranges
+# if month_step == 'Jan11_pulse':
+#     dates = np.arange(11,32)
+
+# elif month_step == 'Jan16_pulse':
+#     dates = np.arange(16, 32)
+
+# elif month_step == 'Jan21_pulse':
+#     dates = np.arange(21, 32)
+
+# elif month_step == 'Jan26_pulse':
+#     dates = np.arange(26, 32)
+
 print(dates)
 
 filenames = [
