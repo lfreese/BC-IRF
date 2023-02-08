@@ -1,7 +1,7 @@
 #!/home/emfreese/anaconda3/envs/gchp/bin/python
 #SBATCH --time=48:00:00
 
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=1
 #SBATCH --partition=edr
 
 
@@ -51,8 +51,8 @@ print('Start year', args.start_year, 'End year', args.end_year, 'Run type', args
 
 
 years = 50
-coal_year_range = np.arange(args.start_year, args.end_year)
-percent = np.arange(0,101)[::2]
+coal_year_range = np.arange(args.start_year, args.end_year)[::5]
+percent = np.arange(0,101)[::5]
 
 weighted_co2 = False
 age_retire = False
@@ -90,7 +90,7 @@ print('Emis data prepped and loaded')
 
 country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_110
 country_df = geopandas.read_file('ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
-countries = ['China','Indonesia','Malaysia','Vietnam','Australia', 'Cambodia','Myanmar', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan']
+countries = ['China']#,'Indonesia','Malaysia','Vietnam','Cambodia']#'Australia', 'Myanmar', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan']
 country_df = country_df.rename(columns = {'SOVEREIGNT':'country'})
 
 ds_area = xr.open_dataset('/net/fs11/d0/emfreese/GCrundirs/IRF_runs/stretch_2x_pulse/SEA/Jan/mod_output/GEOSChem.SpeciesConc.20160101_0000z.nc4', engine = 'netcdf4')
@@ -234,7 +234,7 @@ elif annual_co2 == True:
     for year in coal_year_range:
         E_CO2_all_opts[year] = {}
         for r in percent:
-            E_CO2_all_opts[year][r] = early_retirement_by_CO2_year_annual(year, CGP_df, np.nanpercentile(CGP_df['ANNUALCO2'].dropna(),r), time_array, 40)
+            E_CO2_all_opts[year][r] = early_retirement_by_CO2_annual(year, CGP_df, np.nanpercentile(CGP_df['ANNUALCO2'].dropna(),r), time_array, 40)
     print('Emissions profiles based on Annual CO2 emissions percentiles created')
 
     
@@ -283,16 +283,94 @@ ds_base = signal.convolve(G_lev0.to_numpy(), E_base[..., None, None], mode = 'fu
 ds_base = np_to_xr(ds_base, G_lev0, E_base)
 
 
+# def multiprocess_func(G_lev0, E_CO2_all_opts, country_mask, countries, yr, pc):
+#     data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
+#      #concentration
+#     C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
+#     C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
+#     C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
+
+#     #heath impacts
+#     mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
+#     for country_impacted in countries:
+#         contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(country_impacted))
+#         country_impacted_ds = C_out.where(contiguous_mask)
+#         country_impacted_ds = country_impacted_ds.to_dataset(name = 'BC_conc')
+#         country_area = ds_area['area'].where(contiguous_mask)
+#              #   print(country_impacted_ds)
+#         country_impacted_ds['AF'] = (np.exp(beta*(country_impacted_ds['BC_conc']- ds_base)) - 1)#/np.exp(beta*(country_impacted_ds['BC_conc']- ds_base))
+#         country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
+#          #       print(country_impacted_ds['AF'].max().values, country_impacted_ds['AF'].mean().values, )
+#         mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
+#         conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+
+#     data.loc[country_impacted] = [mort_out, conc_out]
+            
+#     data.to_csv(f'Outputs/weighted_co2/C_out_{country_emit}_{runtype}_{pc}pct_{yr}yr.nc')
+
+# import multiprocessing 
+
+# import itertools
+
+# paramlist = list(itertools.product(coal_year_range, percent))
+    
+# if __name__ == '__main__':
+#     if weighted_co2 == True:
+#         def multiprocess_func(params):
+#             yr = params[0]
+#             pc = params[1]
+
+#             data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
+#              #concentration
+#             C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
+#             C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
+#             C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
+
+#             #heath impacts
+#             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
+#             for country_impacted in countries:
+#                 contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(country_impacted))
+#                 country_impacted_ds = C_out.where(contiguous_mask)
+#                 country_impacted_ds = country_impacted_ds.to_dataset(name = 'BC_conc')
+#                 country_area = ds_area['area'].where(contiguous_mask)
+#                      #   print(country_impacted_ds)
+#                 country_impacted_ds['AF'] = (np.exp(beta*(country_impacted_ds['BC_conc']- ds_base)) - 1)#/np.exp(beta*(country_impacted_ds['BC_conc']- ds_base))
+#                 country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
+#                  #       print(country_impacted_ds['AF'].max().values, country_impacted_ds['AF'].mean().values, )
+#                 mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
+#                 conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+
+#             data.loc[country_impacted] = [mort_out, conc_out]
+
+#             data.to_csv(f'Outputs/weighted_co2/C_out_{country_emit}_{runtype}_{pc}pct_{yr}yr.nc')
+
+
+
+#         pool = multiprocessing.Pool()
+
+#         res = pool.map(multiprocess_func, paramlist)
+#         pool.close()
+#         pool.join()
+#         results_df = pd.concat(res)
+#         print(results_df)
+
+
 if weighted_co2 == True:
     runtype = 'weighted'
     for yr in coal_year_range:
+        processes = []
         for pc in percent:   #active
+#             p = multiprocessing.Process(target = multiprocess_func, args = (G_lev0, E_CO2_all_opts, country_mask, countries, yr, pc))
+#             processes.append(p)
+#             p.start()
+#             for process in processes:
+#                 process.join()
             data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
             #concentration
             C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
             C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
             C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
-            
+
             #heath impacts
             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
             for country_impacted in countries:
@@ -303,10 +381,10 @@ if weighted_co2 == True:
                 print(country_impacted_ds)
                 country_impacted_ds['AF'] = (np.exp(beta*(country_impacted_ds['BC_conc']- ds_base)) - 1)#/np.exp(beta*(country_impacted_ds['BC_conc']- ds_base))
                 country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
-                print(country_impacted_ds['AF'].max().values, country_impacted_ds['AF'].mean().values, )
+                #print(country_impacted_ds['AF'].max().values, country_impacted_ds['AF'].mean().values, )
                 mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
                 conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
-                
+
                 data.loc[country_impacted] = [mort_out, conc_out]
                 print(data)
             data.to_csv(f'Outputs/weighted_co2/C_out_{country_emit}_{runtype}_{pc}pct_{yr}yr.nc')

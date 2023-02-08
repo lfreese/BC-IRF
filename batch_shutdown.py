@@ -5,8 +5,7 @@
 
 
 
-
-sbatch shutdowns_GAINS.py --start_year 0 --end_year 2 --type 'weighted_co2' --country 'CAMBODIA'
+sbatch shutdowns_GAINS.py --start_year 0 --end_year 40 --type 'age_retire' --country 'CAMBODIA'
 sbatch shutdowns_GAINS.py --start_year 2 --end_year 4 --type 'weighted_co2' --country 'CAMBODIA'
 sbatch shutdowns_GAINS.py --start_year 4 --end_year 6 --type 'weighted_co2' --country 'CAMBODIA'
 sbatch shutdowns_GAINS.py --start_year 6 --end_year 8 --type 'weighted_co2' --country 'CAMBODIA'
