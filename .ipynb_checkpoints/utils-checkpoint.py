@@ -78,6 +78,32 @@ def find_area(ds, R = 6378.1):
     
     return(A)
 
+
+def np_to_xr(C, G, E):
+    E_len = len(E)
+    G_len = len(G.s)
+    C = xr.DataArray(
+    data = C,
+    dims = ['s','lat','lon'],
+    coords = dict(
+        s = (['s'], np.arange(0, C.shape[0])), #np.arange(0,(E_len+G_len))),
+        lat = (['lat'], G.lat.values),
+        lon = (['lon'], G.lon.values)
+            )
+        )
+    return(C)
+
+def np_to_xr_mean(C, G, E):
+    E_len = len(E)
+    G_len = len(G.s)
+    C = xr.DataArray(
+    data = C,
+    dims = ['s'],
+    coords = dict(
+        s = (['s'], np.arange(0, C.shape[0])), #np.arange(0,(E_len+G_len))),
+            )
+        )
+    return(C)
 ############## Green's function calculation ################
 
 def G_(GC_out, t, t_p, f_0, Δt):
@@ -135,6 +161,26 @@ def calc_δc_δt(ds, conc_species, run_delta_name, run_base_name):
 def f_(raw_f, t_p): 
     """Select our forcing at time tp"""
     return raw_f.interp({'time':t_p})
+
+
+
+######## height #####
+## from http://wiki.seas.harvard.edu/geos-chem/index.php/GEOS-Chem_vertical_grids
+height = pd.read_excel('GC_lev72.xlsx')
+height_ds = (height.loc[height['L'].isna()].diff().set_index(np.arange(73,0,-1))['Altitude'].dropna()[::-1].to_xarray().rename({'index':'lev'})*-1e3).sortby('lev')
+
+
+pressure = pd.read_excel('GC_lev72.xlsx')
+pressure_ds = (pressure.loc[~pressure['L'].isna()].set_index(np.arange(72,0,-1))['Pressure']*100).to_xarray().rename({'index':'lev'}).sortby('lev')
+
+
+
+
+
+
+
+
+
 
 ########## Convolution #########
 

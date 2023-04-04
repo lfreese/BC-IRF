@@ -1,5 +1,5 @@
 #!/home/emfreese/anaconda3/envs/gchp/bin/python
-#SBATCH --time=48:00:00
+#SBATCH --time=4-00:00:00
 
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=edr
@@ -31,13 +31,14 @@ import numpy as np
 from numba import guvectorize, float64, int64, void
 
 import scipy.signal as signal
+import sparse
 
 ####### There are three options for the type of run: weighted_co2, annual_co2, and age_retire.
 ####### weighted_co2 = shutdowns occur based on the percentile of capacity weighted co2 emissions (dirtier plants = bigger emissions)
 ####### annual_co2 = shutdowns occur based on the percentile of annual co2 emissions (so bigger plants likely = bigger co2 emissions)
 ####### age_retire = shutdowns occure based on the age of the plant
 
-###### Must choose one of these four countries for emissions: 'CAMBODIA', 'INDONESIA', 'MALAYSIA', 'VIETNAM'
+###### Must choose one of these four countries for emissions:  'INDONESIA', 'MALAYSIA', 'VIETNAM'
 
 ################## Parse arguments and set constants ##############
 
@@ -51,8 +52,8 @@ print('Start year', args.start_year, 'End year', args.end_year, 'Run type', args
 
 
 years = 50
-coal_year_range = np.arange(args.start_year, args.end_year)[::5]
-percent = np.arange(0,101)[::5]
+coal_year_range = np.arange(args.start_year, args.end_year)[::2]
+percent = np.arange(0,101)[::2]
 
 weighted_co2 = False
 age_retire = False
@@ -68,6 +69,10 @@ country_emit = args.country_emit
 ## Add time dimension
 length_simulation = years*365
 time_array = np.arange(0, length_simulation)
+
+## Days per season
+season_days = {'DJF': 90, 'MAM':92, 'JJA':92, 'SON':91}
+
 
 ## import the china global powerplant database
 ### Gallagher, Kevin P. (2021), “China’s Global Energy Finance,” Global Development Policy Center, Boston University.
@@ -90,7 +95,7 @@ print('Emis data prepped and loaded')
 
 country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_110
 country_df = geopandas.read_file('ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
-countries = ['China']#,'Indonesia','Malaysia','Vietnam','Cambodia']#'Australia', 'Myanmar', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan']
+countries = ['China','Indonesia','Malaysia','Vietnam','Cambodia']#'Australia', 'Myanmar', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan']
 country_df = country_df.rename(columns = {'SOVEREIGNT':'country'})
 
 ds_area = xr.open_dataset('/net/fs11/d0/emfreese/GCrundirs/IRF_runs/stretch_2x_pulse/SEA/Jan/mod_output/GEOSChem.SpeciesConc.20160101_0000z.nc4', engine = 'netcdf4')
@@ -128,6 +133,7 @@ I0_pop_df['I_obs'] = I0_pop_df['Ival']/I0_pop_df['POP_EST'] #calculate initial m
 
 regrid_area_ds = xr.open_dataset('Outputs/regridded_population_data.nc')
 
+
 ####### Functions #########
 
 def early_retirement_by_CO2_weighted(year_early, df, CO2_val, time_array, shutdown_years):
@@ -139,27 +145,16 @@ def early_retirement_by_CO2_weighted(year_early, df, CO2_val, time_array, shutdo
     min_comission_yr = df['Year_of_Commission'].min()
     shutdown_days = shutdown_years*365
     E = np.zeros(len(time_array))
-    #print(min_comission_yr)
-    #print(shutdown_days)
+
     test_array = np.where(time_array <= year_early*365, True, False)
-    #print('test array len', len(test_array))
-    #plt.plot(test_array)
+
     E += test_array* df.loc[df.CO2_weighted_capacity_1000tonsperMW >= CO2_val]['BC_(g/day)'].sum()
-    #fig, ax = plt.subplots()
-    #plt.plot(E)
-    #plt.title('E')
-    #print(E)
+
     for year_comis in np.arange(min_comission_yr, df['Year_of_Commission'].max()):
-        #print(year_comis)
-        #print(df.loc[df.Year_of_Commission == year_comis]['BC_(g/day)'].sum())
-        #print(np.nanpercentile(CGP_df['CO2_weighted_capacity_1000tonsperMW'],r))
         test_array = np.where((time_array <= (year_comis-min_comission_yr)*365 + shutdown_days), True, False)
-        #plt.plot(test_array)
-        #fig, ax = plt.subplots()
-        #plt.plot(test_array* df.loc[(df.CO2_weighted_capacity_1000tonsperMW < CO2_val) & (df.Year_of_Commission == year_comis)]['BC_(g/day)'].sum())
+
         E += test_array* df.loc[(df.CO2_weighted_capacity_1000tonsperMW < CO2_val) & (df.Year_of_Commission == year_comis)]['BC_(g/day)'].sum()
-        #E[year] += (time_array>=0) * df.loc[df.CO2_weighted_capacity_1000tonsperMW < CO2_val]['BC_(g/day)'].sum()
-        #plt.plot(E)
+
 
     
     return(E)
@@ -174,45 +169,34 @@ def early_retirement_by_CO2_annual(year_early, df, CO2_val, time_array, shutdown
     min_comission_yr = df['Year_of_Commission'].min()
     shutdown_days = shutdown_years*365
     E = np.zeros(len(time_array))
-    #print(min_comission_yr)
-    #print(shutdown_days)
+
     test_array = np.where(time_array <= year_early*365, True, False)
-    #print('test array len', len(test_array))
-    #plt.plot(test_array)
+
     E += test_array* df.loc[df.ANNUALCO2 >= CO2_val]['BC_(g/day)'].sum()
-    #fig, ax = plt.subplots()
-    #plt.plot(E)
-    #plt.title('E')
-    #print(E)
+
     for year_comis in np.arange(min_comission_yr, df['Year_of_Commission'].max()):
-        #print(year_comis)
-        #print(df.loc[df.Year_of_Commission == year_comis]['BC_(g/day)'].sum())
-        #print(np.nanpercentile(CGP_df['CO2_weighted_capacity_1000tonsperMW'],r))
+
         test_array = np.where((time_array <= (year_comis-min_comission_yr)*365 + shutdown_days), True, False)
-        #plt.plot(test_array)
-        #fig, ax = plt.subplots()
-        #plt.plot(test_array* df.loc[(df.CO2_weighted_capacity_1000tonsperMW < CO2_val) & (df.Year_of_Commission == year_comis)]['BC_(g/day)'].sum())
+
         E += test_array* df.loc[(df.ANNUALCO2 < CO2_val) & (df.Year_of_Commission == year_comis)]['BC_(g/day)'].sum()
-        #E[year] += (time_array>=0) * df.loc[df.CO2_weighted_capacity_1000tonsperMW < CO2_val]['BC_(g/day)'].sum()
-        #plt.plot(E)
+
     return(E)
 
 
 def early_retirement_by_year(df, time_array, shutdown_years):
     ''' Shutdown a plant early if comissioned before a certain year, all other plants stay on until they reach 40 year time limit. The df must have a variable 'Year_of_Comission' describing when the plant was comissioned, and 'BC_(g/day)' for BC emissions in g/day'''
-    #shutdown_years = 10
     min_comission_yr = df['Year_of_Commission'].min()
     shutdown_days = shutdown_years*365
 
     E = np.zeros(len(time_array))
     for year_comis in np.arange(min_comission_yr, df['Year_of_Commission'].max()):
-        #print(year_comis)
-        #print(CGP_op.loc[CGP_op.Year_of_Commission == year_comis]['BC_(g/day)'].sum())
+
         test_array = np.where((time_array < (year_comis-min_comission_yr)*365 + shutdown_days) & (time_array >= (year_comis-min_comission_yr)*365), True, False)
-        #plt.plot(test_array)
         E += test_array* df.loc[df.Year_of_Commission == year_comis]['BC_(g/day)'].sum()
-        #plt.plot(E)
     return(E)
+
+
+
 
 
 ########## Create emissions profile ##########
@@ -257,11 +241,18 @@ country_emit_dict = {'INDONESIA':['Indo_Jan', 'Indo_Apr', 'Indo_July','Indo_Oct'
 #import the green's function and set our time step
 G = xr.open_dataarray('Outputs/G_all_loc_all_times_BC_total.nc4', chunks = 'auto')
 dt = 1 #day
-G_lev0 = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).mean(dim = 'run').isel(lev = 0).compute()
+
+G_lev0 = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).isel(lev = 0).compute()
 G_lev0 = G_lev0.rename({'time':'s'})
+
+###########CHECK THIS CHANGE ###########
+#G_lev0 = {}
+# for season in season_days:
+#     G_lev0[season] = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).mean(dim = 'run').isel(lev = 0).compute()
+#     G_lev0[season] = G_lev0[season].rename({'time':'s'})
+
 print('G prepped')
-
-
+############################################
 
 def np_to_xr(C, G, E):
     E_len = len(E)
@@ -277,82 +268,55 @@ def np_to_xr(C, G, E):
         )
     return(C)
 
-## define our base pollution level
 E_base = early_retirement_by_year(CGP_df, time_array, 40)
-ds_base = signal.convolve(G_lev0.to_numpy(), E_base[..., None, None], mode = 'full')
-ds_base = np_to_xr(ds_base, G_lev0, E_base)
+C_conv = {}
+C_init = {}
+yr_range = coal_year_range
+n = 0
+for yr_num in yr_range:
+    n_init = n
 
+    for idx, season in enumerate(season_days.keys()):
+        C_conv[season] = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx]).dropna(dim = 's'), 
+                     E_base[n:n+season_days[season]][..., None, None], mode = 'full')
+        #switch the tail (that goes into the following months) to follow the GF of the next month 
+        if idx == 0 or idx == 1 or idx == 2:
+            idx_next = idx + 1
+        elif idx == 3:
+            idx_next = 0
 
-# def multiprocess_func(G_lev0, E_CO2_all_opts, country_mask, countries, yr, pc):
-#     data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
-#      #concentration
-#     C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
-#     C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
-#     C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
+        tail_switch = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx_next]).dropna(dim = 's'), 
+                             E_base[n:n+season_days[season]][..., None, None], mode = 'full')
 
-#     #heath impacts
-#     mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
-#     for country_impacted in countries:
-#         contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(country_impacted))
-#         country_impacted_ds = C_out.where(contiguous_mask)
-#         country_impacted_ds = country_impacted_ds.to_dataset(name = 'BC_conc')
-#         country_area = ds_area['area'].where(contiguous_mask)
-#              #   print(country_impacted_ds)
-#         country_impacted_ds['AF'] = (np.exp(beta*(country_impacted_ds['BC_conc']- ds_base)) - 1)#/np.exp(beta*(country_impacted_ds['BC_conc']- ds_base))
-#         country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
-#          #       print(country_impacted_ds['AF'].max().values, country_impacted_ds['AF'].mean().values, )
-#         mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
-#         conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+        C_conv[season][season_days[season]:tail_switch[season_days[season]:C_conv[season].shape[0]].shape[0]+season_days[season]] = tail_switch[season_days[season]:C_conv[season].shape[0]]
 
-#     data.loc[country_impacted] = [mort_out, conc_out]
-            
-#     data.to_csv(f'Outputs/weighted_co2/C_out_{country_emit}_{runtype}_{pc}pct_{yr}yr.nc')
+        n = n + season_days[season]
 
-# import multiprocessing 
+    C = {}
 
-# import itertools
+    C['DJF'] = sparse.COO.from_numpy((np.pad(C_conv['DJF'],((((n_init),
+                                       (len(E_base) - len(C_conv['DJF']) - (n_init)))),
+                                     (0,0),(0,0)))))
+    C['MAM'] = sparse.COO.from_numpy((np.pad(C_conv['MAM'],((((season_days['DJF'] + (n_init)),
+                                       (len(E_base) - season_days['DJF'] - len(C_conv['MAM']) - (n_init)))),
+                                     (0,0),(0,0)))))
+    C['JJA'] = sparse.COO.from_numpy((np.pad(C_conv['JJA'],(((season_days['DJF'] + season_days['MAM'] + (n_init),
+                                       (len(E_base) - season_days['DJF'] - season_days['MAM'] - len(C_conv['JJA']) - (n_init)))),
+                                     (0,0),(0,0)))))
+    C['SON'] = sparse.COO.from_numpy((np.pad(C_conv['SON'], (((season_days['DJF'] + season_days['MAM'] + season_days['JJA'] + (n_init),
+                                        (len(E_base) - season_days['DJF'] - season_days['MAM'] - season_days['JJA'] - len(C_conv['SON']) - (n_init)))),
+                                      (0,0),(0,0)))))
+    C_init[yr_num] = C['DJF']+C['MAM']+C['JJA']+C['SON']
 
-# paramlist = list(itertools.product(coal_year_range, percent))
-    
-# if __name__ == '__main__':
-#     if weighted_co2 == True:
-#         def multiprocess_func(params):
-#             yr = params[0]
-#             pc = params[1]
+C_sum = sum(C_init[yr_num] for yr_num in yr_range)
+C_dense = sparse.COO.todense(C_sum)
+ds_base = np_to_xr(C_dense, G_lev0, E_base)
 
-#             data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
-#              #concentration
-#             C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
-#             C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
-#             C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
-
-#             #heath impacts
-#             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
-#             for country_impacted in countries:
-#                 contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(country_impacted))
-#                 country_impacted_ds = C_out.where(contiguous_mask)
-#                 country_impacted_ds = country_impacted_ds.to_dataset(name = 'BC_conc')
-#                 country_area = ds_area['area'].where(contiguous_mask)
-#                      #   print(country_impacted_ds)
-#                 country_impacted_ds['AF'] = (np.exp(beta*(country_impacted_ds['BC_conc']- ds_base)) - 1)#/np.exp(beta*(country_impacted_ds['BC_conc']- ds_base))
-#                 country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
-#                  #       print(country_impacted_ds['AF'].max().values, country_impacted_ds['AF'].mean().values, )
-#                 mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
-#                 conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
-
-#             data.loc[country_impacted] = [mort_out, conc_out]
-
-#             data.to_csv(f'Outputs/weighted_co2/C_out_{country_emit}_{runtype}_{pc}pct_{yr}yr.nc')
-
-
-
-#         pool = multiprocessing.Pool()
-
-#         res = pool.map(multiprocess_func, paramlist)
-#         pool.close()
-#         pool.join()
-#         results_df = pd.concat(res)
-#         print(results_df)
+################old code ######################
+## define our base pollution level
+# E_base = early_retirement_by_year(CGP_df, time_array, 40)
+# ds_base = signal.convolve(G_lev0.to_numpy(), E_base[..., None, None], mode = 'full')
+# ds_base = np_to_xr(ds_base, G_lev0, E_base)
 
 
 if weighted_co2 == True:
@@ -360,17 +324,58 @@ if weighted_co2 == True:
     for yr in coal_year_range:
         processes = []
         for pc in percent:   #active
-#             p = multiprocessing.Process(target = multiprocess_func, args = (G_lev0, E_CO2_all_opts, country_mask, countries, yr, pc))
-#             processes.append(p)
-#             p.start()
-#             for process in processes:
-#                 process.join()
             data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
             #concentration
-            C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
-            C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
-            C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
+            #####start new#############
+            C_conv = {}
+            C_init = {}
+            yr_range = coal_year_range
+            n = 0
+            for yr_num in yr_range:
+                n_init = n
+                
+                for idx, season in enumerate(season_days.keys()):
+                    C_conv[season] = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx]).dropna(dim = 's'), 
+                                 E_CO2_all_opts[yr][pc][n:n+season_days[season]][..., None, None], mode = 'full')
+                    #switch the tail (that goes into the following months) to follow the GF of the next month 
+                    if idx == 0 or idx == 1 or idx == 2:
+                        idx_next = idx + 1
+                    elif idx == 3:
+                        idx_next = 0
 
+                    tail_switch = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx_next]).dropna(dim = 's'), 
+                                         E_CO2_all_opts[yr][pc][n:n+season_days[season]][..., None, None], mode = 'full')
+
+                    C_conv[season][season_days[season]:tail_switch[season_days[season]:C_conv[season].shape[0]].shape[0]+season_days[season]] = tail_switch[season_days[season]:C_conv[season].shape[0]]
+
+                    n = n + season_days[season]
+                
+                C = {}
+                
+                C['DJF'] = sparse.COO.from_numpy((np.pad(C_conv['DJF'],((((n_init),
+                                                   (len(E_CO2_all_opts[yr][pc]) - len(C_conv['DJF']) - (n_init)))),
+                                                 (0,0),(0,0)))))
+                C['MAM'] = sparse.COO.from_numpy((np.pad(C_conv['MAM'],((((season_days['DJF'] + (n_init)),
+                                                   (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - len(C_conv['MAM']) - (n_init)))),
+                                                 (0,0),(0,0)))))
+                C['JJA'] = sparse.COO.from_numpy((np.pad(C_conv['JJA'],(((season_days['DJF'] + season_days['MAM'] + (n_init),
+                                                   (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - season_days['MAM'] - len(C_conv['JJA']) - (n_init)))),
+                                                 (0,0),(0,0)))))
+                C['SON'] = sparse.COO.from_numpy((np.pad(C_conv['SON'], (((season_days['DJF'] + season_days['MAM'] + season_days['JJA'] + (n_init),
+                                                    (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - season_days['MAM'] - season_days['JJA'] - len(C_conv['SON']) - (n_init)))),
+                                                  (0,0),(0,0)))))
+                C_init[yr_num] = C['DJF']+C['MAM']+C['JJA']+C['SON']
+
+            C_sum = sum(C_init[yr_num] for yr_num in yr_range)
+            C_dense = sparse.COO.todense(C_sum)
+            C_out = np_to_xr(C_dense, G_lev0, E_CO2_all_opts[yr][pc])
+
+            #####end new###############
+            ######old###########
+#             C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
+#             C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
+#             C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
+            ######old###########
             #heath impacts
             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
             for country_impacted in countries:
@@ -404,9 +409,58 @@ elif annual_co2 == True:
         for pc in percent:  
             data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
             #concentration
-            C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
-            C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
-            C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
+            #####start new#############
+            C_conv = {}
+            C_init = {}
+            yr_range = coal_year_range
+            n = 0
+            for yr_num in yr_range:
+                n_init = n
+                print(n)
+                for idx, season in enumerate(season_days.keys()):
+                    C_conv[season] = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx]).dropna(dim = 's'), 
+                                 E_CO2_all_opts[yr][pc][n:n+season_days[season]][..., None, None], mode = 'full')
+                    #switch the tail (that goes into the following months) to follow the GF of the next month 
+                    if idx == 0 or idx == 1 or idx == 2:
+                        idx_next = idx + 1
+                    elif idx == 3:
+                        idx_next = 0
+
+                    tail_switch = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx_next]).dropna(dim = 's'), 
+                                         E_CO2_all_opts[yr][pc][n:n+season_days[season]][..., None, None], mode = 'full')
+
+                    C_conv[season][season_days[season]:tail_switch[season_days[season]:C_conv[season].shape[0]].shape[0]+season_days[season]] = tail_switch[season_days[season]:C_conv[season].shape[0]]
+
+                    n = n + season_days[season]
+                    print(n)
+                C = {}
+                print(f'initial n {n_init}')
+                C['DJF'] = sparse.COO.from_numpy((np.pad(C_conv['DJF'],((((n_init),
+                                                   (len(E_CO2_all_opts[yr][pc]) - len(C_conv['DJF']) - (n_init)))),
+                                                 (0,0),(0,0)))))
+                C['MAM'] = sparse.COO.from_numpy((np.pad(C_conv['MAM'],((((season_days['DJF'] + (n_init)),
+                                                   (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - len(C_conv['MAM']) - (n_init)))),
+                                                 (0,0),(0,0)))))
+                C['JJA'] = sparse.COO.from_numpy((np.pad(C_conv['JJA'],(((season_days['DJF'] + season_days['MAM'] + (n_init),
+                                                   (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - season_days['MAM'] - len(C_conv['JJA']) - (n_init)))),
+                                                 (0,0),(0,0)))))
+                C['SON'] = sparse.COO.from_numpy((np.pad(C_conv['SON'], (((season_days['DJF'] + season_days['MAM'] + season_days['JJA'] + (n_init),
+                                                    (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - season_days['MAM'] - season_days['JJA'] - len(C_conv['SON']) - (n_init)))),
+                                                  (0,0),(0,0)))))
+                C_init[yr_num] = C['DJF']+C['MAM']+C['JJA']+C['SON']
+
+            C_sum = sum(C_init[yr_num] for yr_num in yr_range)
+            C_dense = sparse.COO.todense(C_sum)
+            C_out = np_to_xr(C_dense, G_lev0, E_CO2_all_opts[yr][pc])
+
+            #####end new###############
+            ##### old #########
+#             #concentration
+#             C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][pc][..., None, None], mode = 'full')
+#             C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
+#             C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr][pc])
+            ##### old #########
+    
             #heath impacts
             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
             for country_impacted in countries:
@@ -436,9 +490,59 @@ elif age_retire == True:
     for yr in coal_year_range:
         data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
         #concentration
-        C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][..., None, None], mode = 'full')
-        C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
-        C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr])
+        #####start new#############
+        C_conv = {}
+        C_init = {}
+        yr_range = np.arange(1,5)#len(E_CO2_all_opts[yr][pc]/365))
+        n = 0
+        for yr_num in yr_range:
+            n_init = n
+            print(n)
+            for idx, season in enumerate(season_days.keys()):
+                C_conv[season] = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx]).dropna(dim = 's'), 
+                             E_CO2_all_opts[yr][pc][n:n+season_days[season]][..., None, None], mode = 'full')
+                #switch the tail (that goes into the following months) to follow the GF of the next month 
+                if idx == 0 or idx == 1 or idx == 2:
+                    idx_next = idx + 1
+                elif idx == 3:
+                    idx_next = 0
+
+                tail_switch = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx_next]).dropna(dim = 's'), 
+                                     E_CO2_all_opts[yr][pc][n:n+season_days[season]][..., None, None], mode = 'full')
+
+                C_conv[season][season_days[season]:tail_switch[season_days[season]:C_conv[season].shape[0]].shape[0]+season_days[season]] = tail_switch[season_days[season]:C_conv[season].shape[0]]
+
+                n = n + season_days[season]
+                print(n)
+            C = {}
+            print(f'initial n {n_init}')
+            C['DJF'] = sparse.COO.from_numpy((np.pad(C_conv['DJF'],((((n_init),
+                                               (len(E_CO2_all_opts[yr][pc]) - len(C_conv['DJF']) - (n_init)))),
+                                             (0,0),(0,0)))))
+            C['MAM'] = sparse.COO.from_numpy((np.pad(C_conv['MAM'],((((season_days['DJF'] + (n_init)),
+                                               (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - len(C_conv['MAM']) - (n_init)))),
+                                             (0,0),(0,0)))))
+            C['JJA'] = sparse.COO.from_numpy((np.pad(C_conv['JJA'],(((season_days['DJF'] + season_days['MAM'] + (n_init),
+                                               (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - season_days['MAM'] - len(C_conv['JJA']) - (n_init)))),
+                                             (0,0),(0,0)))))
+            C['SON'] = sparse.COO.from_numpy((np.pad(C_conv['SON'], (((season_days['DJF'] + season_days['MAM'] + season_days['JJA'] + (n_init),
+                                                (len(E_CO2_all_opts[yr][pc]) - season_days['DJF'] - season_days['MAM'] - season_days['JJA'] - len(C_conv['SON']) - (n_init)))),
+                                              (0,0),(0,0)))))
+            C_init[yr_num] = C['DJF']+C['MAM']+C['JJA']+C['SON']
+
+            C_sum = sum(C_init[yr_num] for yr_num in yr_range)
+            C_dense = sparse.COO.todense(C_sum)
+            C_out = np_to_xr(C_dense, G_lev0, E_CO2_all_opts[yr][pc])
+
+            #####end new###############
+            
+        
+        ####old######
+#         C_out =  signal.convolve(G_lev0.to_numpy(), E_CO2_all_opts[yr][..., None, None], mode = 'full')
+#         C_out = da.from_array(C_out, chunks = [C_out.shape[0]//10,C_out.shape[1]//10,C_out.shape[2]//10])
+#         C_out = np_to_xr(C_out, G_lev0, E_CO2_all_opts[yr])
+        ####old######
+    
         #heath impacts
         mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
         for country_impacted in countries:

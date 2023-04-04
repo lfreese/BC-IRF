@@ -199,42 +199,40 @@ for d in locations:
 print('F0, initial forcing, complete')
 
 
-
 ### convert to correct units
-def ppb_to_ug(ds, species_to_convert, mw_species_list, P, T):
+def ppb_to_ug(ds, species_to_convert, mw_species_list, stp_p = 101325, stp_t = 298.):
     '''Convert species to ug/m3 from ppb'''
     R = 8.314 #J/K/mol
-    mol_per_m3= (P / (T * R)) #Pa/K/(J/K/mol) = mol/m3
+    mol_per_m3= (stp_p / (stp_t * R)) #Pa/K/(J/K/mol) = mol/m3
     
     for spec in species_to_convert:
         attrs = ds[spec].attrs
-        ds[spec] = ds[spec]*mw_species_list[spec]*mol_per_m3*1e-3 #ppb*g/mol*mol/m3*ug/ng
+        x = ds[spec]*mw_species_list[spec]*mol_per_m3*1e-3 #ppb*g/mol*mol/m3*ug/ng
+        ds[spec] = x
         ds[spec].attrs['units'] = 'μg m-3'
+    return(x)
 
 mw_BC = {'BC_total':12.011}
 
-T_p_ds = xr.open_mfdataset('/net/geoschem/data/gcgrid/data/ExtData/GEOS_0.5x0.625/MERRA2/2016/*/MERRA2.2016*.I3.05x0625.nc4')
-T_p_ds = T_p_ds.groupby('time.date').mean(dim = 'time').rename({'date':'time'})
-pressure_ds = utils.pressure_ds
-
-
 for i in dict_conc.keys():
     dict_conc[i]['BC_total'] = dict_conc[i]['BC_total']*1e9 #convert mol/mol to ppb
-    ppb_to_ug(dict_conc[i], [poll_name], mw_BC, pressure_ds, T_p_ds['T'])
+    ppb_to_ug(dict_conc[i], [poll_name], mw_BC)
+
+print('Converted units')
 
 
 
 ### calculate the Green's function as dc/f0
 
 G_dict = {}
-#G_dict_gmean = {}
+G_dict_gmean = {}
 regions = ['SEA', 'Indo','Malay','all_countries','Viet','Cambod']
     
 for r in regions:
     for m in months:
         G_dict[r + '_' + m] = (dict_conc[r + '_' + m]-dict_conc[f'base_{m}'])['BC_total']/f0[r + '_' + m]
-#         G_dict_gmean[r + '_' + m] = (dict_conc[r + '_' + m]-dict_conc[f'base_{m}'])['BC_total'].weighted(
-#             dict_conc[f'base_{m}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0[r + '_' + m]
+        G_dict_gmean[r + '_' + m] = (dict_conc[r + '_' + m]-dict_conc[f'base_{m}'])['BC_total'].weighted(
+            dict_conc[f'base_{m}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0[r + '_' + m]
 
 
 
@@ -244,12 +242,12 @@ for m in months:
                                           (dict_conc['Viet_' + m]-dict_conc[f'base_{m}'])['BC_total']+
                                           (dict_conc['Cambod_' + m]-dict_conc[f'base_{m}'])['BC_total'])/
                                            (f0['Indo_Jan'] + f0['Viet_Jan'] + f0['Malay_Jan'] + f0['Cambod_Jan']))
-#     G_dict_gmean[f'all_countries_summed_{m}'] = (((dict_conc['Indo_' + m]-dict_conc[f'base_{m}'])['BC_total']+ 
-#                                           (dict_conc['Malay_' + m]-dict_conc[f'base_{m}'])['BC_total']+
-#                                           (dict_conc['Viet_' + m]-dict_conc[f'base_{m}'])['BC_total']+
-#                                           (dict_conc['Cambod_' + m]-dict_conc[f'base_{m}'])['BC_total']).weighted(
-#         dict_conc[f'base_{m}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/
-#  (f0['Indo_Jan'] + f0['Viet_Jan'] + f0['Malay_Jan'] + f0['Cambod_Jan']))
+    G_dict_gmean[f'all_countries_summed_{m}'] = (((dict_conc['Indo_' + m]-dict_conc[f'base_{m}'])['BC_total']+ 
+                                          (dict_conc['Malay_' + m]-dict_conc[f'base_{m}'])['BC_total']+
+                                          (dict_conc['Viet_' + m]-dict_conc[f'base_{m}'])['BC_total']+
+                                          (dict_conc['Cambod_' + m]-dict_conc[f'base_{m}'])['BC_total']).weighted(
+        dict_conc[f'base_{m}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/
+ (f0['Indo_Jan'] + f0['Viet_Jan'] + f0['Malay_Jan'] + f0['Cambod_Jan']))
     
     
 
@@ -257,20 +255,20 @@ for m in months:
 m = 'Jan'
 for r in regions:
     G_dict[r + '_' + m + '_16x'] = (dict_conc[r + '_' + m + '_16x']-dict_conc[f'base_{m}'])['BC_total']/f0[r + '_' + m + '_16x']
-#     G_dict_gmean[r + '_' + m + '_16x'] = (dict_conc[r + '_' + m]-dict_conc[f'base_{m}'])['BC_total'].weighted(
-#         dict_conc[f'base_{m}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0[r + '_' + m + '_16x']
+    G_dict_gmean[r + '_' + m + '_16x'] = (dict_conc[r + '_' + m]-dict_conc[f'base_{m}'])['BC_total'].weighted(
+        dict_conc[f'base_{m}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0[r + '_' + m + '_16x']
 
 
 for d in days:
     G_dict['Indo_Jan_' + d] = (dict_conc['Indo_Jan_' + d]-dict_conc[f'base_Jan_{d}'])['BC_total']/f0['Indo_Jan_' + d]
-#     G_dict_gmean['Indo_Jan_' + d] = (dict_conc['Indo_Jan_' + d]-dict_conc[f'base_Jan_{d}'])['BC_total'].weighted(
-#         dict_conc[f'base_Jan_{d}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0['Indo_Jan_' + d]
+    G_dict_gmean['Indo_Jan_' + d] = (dict_conc['Indo_Jan_' + d]-dict_conc[f'base_Jan_{d}'])['BC_total'].weighted(
+        dict_conc[f'base_Jan_{d}']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0['Indo_Jan_' + d]
 
 
 for d in locations:
     G_dict['Indo_Jan_' + d] = (dict_conc['Indo_Jan_' + d]-dict_conc[f'base_Jan'])['BC_total']/f0['Indo_Jan_' + d]
-#     G_dict_gmean['Indo_Jan_' + d] = (dict_conc['Indo_Jan_' + d]-dict_conc[f'base_Jan'])['BC_total'].weighted(
-#         dict_conc[f'base_Jan']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0['Indo_Jan_' + d]
+    G_dict_gmean['Indo_Jan_' + d] = (dict_conc['Indo_Jan_' + d]-dict_conc[f'base_Jan'])['BC_total'].weighted(
+        dict_conc[f'base_Jan']['area'].fillna(0)*height_ds['dz'].fillna(0)).mean(['lat','lon','lev'])/f0['Indo_Jan_' + d]
 print('Calculated GF')
 
 
@@ -278,6 +276,13 @@ print('Calculated GF')
 
 import dask
 dask.config.set(**{'array.slicing.split_large_chunks': True})
+
+# for r in ['all_countries_summed_Jan', 'all_countries_summed_Apr', 'all_countries_summed_July', 'all_countries_summed_Oct']:
+#     dict_conc[r]= utils.fix_area_ij_latlon(dict_conc[r])
+
+
+# for r in ['all_countries_summed_Jan', 'all_countries_summed_Apr', 'all_countries_summed_July', 'all_countries_summed_Oct']:
+#     dict_conc[r]['time'] = dict_conc[r]['time']-dict_conc[r]['time'][0]
 
 
 def exponential_decay(a, b, N):
@@ -296,14 +301,24 @@ for r in G_dict.keys():
     full_ds[r] = xr.concat([G_dict[r], exp_app], dim = 'time')
 
 
+# full_ds = {}
+# for r in G_dict.keys():   
+#     tail_add = (G_dict[r].weighted(dict_conc[r]['area']).mean(dim = ['lat','lon'])/
+#      G_dict[r].weighted(dict_conc[r]['area']).mean(dim = ['lat','lon']).isel(time = 0)) #normalized 
+
+#     adj_tail_add = (G_dict[r].isel(time = -1)*tail_add)
+
+#     adj_tail_add['time'] = G_dict[r]['time'][-1] + adj_tail_add['time'][1] + adj_tail_add['time']
+#     full_ds[r] = xr.concat([G_dict[r], adj_tail_add], dim = 'time')
+    
 # print('Added tail')
 ### convert to datasets, calculate mean GF
 G = xr.concat([full_ds[r] for r in full_ds.keys()], pd.Index([r for r in full_ds.keys()], name='run'))
-#G_mean = xr.concat([G_dict_gmean[r] for r in G_dict_gmean.keys()], pd.Index([r for r in G_dict_gmean.keys()], name='run'))
+G_mean = xr.concat([G_dict_gmean[r] for r in G_dict_gmean.keys()], pd.Index([r for r in G_dict_gmean.keys()], name='run'))
 
 
 ### Save out the Green's function
 G.to_netcdf(f'Outputs/new_G_all_loc_all_times_{poll_name}.nc4', mode = 'w')
-#G_mean.to_netcdf(f'Outputs/new_G_mean_all_loc_all_times_{poll_name}.nc4',  mode = 'w')
+G_mean.to_netcdf(f'Outputs/new_G_mean_all_loc_all_times_{poll_name}.nc4',  mode = 'w')
 
 
