@@ -52,8 +52,8 @@ print('Start year', args.start_year, 'End year', args.end_year, 'Run type', args
 
 
 years = 50
-coal_year_range = np.arange(args.start_year, args.end_year)[::2]
-percent = np.arange(0,101)[::2]
+coal_year_range = np.arange(args.start_year, args.end_year)[::5]
+percent = np.arange(0,101)[::5]
 
 weighted_co2 = False
 age_retire = False
@@ -93,9 +93,9 @@ print('Emis data prepped and loaded')
 
 ######## Country mask and dataframe ######
 
-country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_110
+country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_50
 country_df = geopandas.read_file('ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
-countries = ['China','Indonesia','Malaysia','Vietnam','Cambodia']#'Australia', 'Myanmar', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan']
+countries = ['China','Australia', 'India','Myanmar', 'Cambodia', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan','Brunei','Singapore', 'Papua New Guinea', 'Solomon Islands', 'East Timor', 'Taiwan']
 country_df = country_df.rename(columns = {'SOVEREIGNT':'country'})
 
 ds_area = xr.open_dataset('/net/fs11/d0/emfreese/GCrundirs/IRF_runs/stretch_2x_pulse/SEA/Jan/mod_output/GEOSChem.SpeciesConc.20160101_0000z.nc4', engine = 'netcdf4')
@@ -109,12 +109,12 @@ del_x = 10 #ug/m3
 beta = np.log(RR)/del_x
 
 
-#2019 mortalities to match 2019 population data from the GBD 
+#2019 mortalities to match 2019 population data from the GBD #20+, all gender mortalities https://vizhub.healthdata.org/gbd-results/
 I_val = {}
 I_val['China'] = 10462043.68
-I_val['Indonesia'] = 35874.09
-I_val['Malaysia'] = 169483.46
-I_val['Vietnam'] = 606145.89
+#I_val['Indonesia'] = 35874.09
+#I_val['Malaysia'] = 169483.46
+#I_val['Vietnam'] = 606145.89
 I_val['Australia'] = 169053.20
 I_val['Cambodia'] = 96284.85
 I_val['Myanmar'] = 368031.84
@@ -124,6 +124,14 @@ I_val['Nepal'] = 170032.44
 I_val['Bangladesh'] = 740684.73
 I_val['Thailand'] = 486556.52
 I_val['Bhutan'] = 3713.40
+I_val['East Timor'] = 6240.29
+I_val['Solomon Islands'] = 5484.73
+I_val['Brunei'] = 1790.80
+I_val['Papua New Guinea'] = 49174.72
+I_val['India'] = 8288847.22
+I_val['Singapore'] = 23028.19
+I_val['Taiwan'] = 183845.08
+
 
 I_val_df = pd.DataFrame(I_val.values(), index = I_val.keys()).rename(columns = {0:'Ival'}) 
 I_val_df.index.rename('country', inplace = True)
@@ -239,7 +247,7 @@ country_emit_dict = {'INDONESIA':['Indo_Jan', 'Indo_Apr', 'Indo_July','Indo_Oct'
                'MALAYSIA': ['Malay_Jan','Malay_Apr','Malay_July','Malay_Oct'], 'VIETNAM': ['Viet_Jan','Viet_Apr','Viet_July','Viet_Oct']}
 
 #import the green's function and set our time step
-G = xr.open_dataarray('Outputs/G_all_loc_all_times_BC_total.nc4', chunks = 'auto')
+G = xr.open_dataarray('Outputs/G_combined_new.nc', chunks = 'auto')
 dt = 1 #day
 
 G_lev0 = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).isel(lev = 0).compute()
@@ -278,7 +286,7 @@ for yr_num in yr_range:
 
     for idx, season in enumerate(season_days.keys()):
         C_conv[season] = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx]).dropna(dim = 's'), 
-                     E_base[n:n+season_days[season]][..., None, None], mode = 'full')
+                     E_base[n:n+season_days[season]+1][..., None, None], mode = 'full')
         #switch the tail (that goes into the following months) to follow the GF of the next month 
         if idx == 0 or idx == 1 or idx == 2:
             idx_next = idx + 1
@@ -324,7 +332,7 @@ if weighted_co2 == True:
     for yr in coal_year_range:
         processes = []
         for pc in percent:   #active
-            data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
+            data = pd.DataFrame(columns = ['Mortalities','BC_mean_Conc', 'BC_sum_conc','BC_pop_weight_mean_conc'], index = countries)
             #concentration
             #####start new#############
             C_conv = {}
@@ -379,7 +387,13 @@ if weighted_co2 == True:
             #heath impacts
             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
             for country_impacted in countries:
-                contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(country_impacted))
+                if country_impacted == 'East Timor':
+                    c_imp = 'Timor-Leste'
+                elif country_impacted == 'Solomon Islands':
+                    c_imp = 'Solomon Is.'
+                else:
+                    c_imp = country_impacted
+                contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(c_imp))
                 country_impacted_ds = C_out.where(contiguous_mask)
                 country_impacted_ds = country_impacted_ds.to_dataset(name = 'BC_conc')
                 country_area = ds_area['area'].where(contiguous_mask)
@@ -388,9 +402,15 @@ if weighted_co2 == True:
                 country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
                 #print(country_impacted_ds['AF'].max().values, country_impacted_ds['AF'].mean().values, )
                 mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
-                conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+                conc_mean_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+                conc_sum_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values #take a mean to test
+                
+            
+                pop_weight_conc = utils.grouped_weighted_avg(country_impacted_ds['BC_conc'], regrid_area_ds['regrid_pop_count']).values
+                #pop_weight_mean_conc_out = ((pop_weight_conc*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+                #pop_weight_sum_conc_out = ((pop_weight_conc*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values #take a mean to test
 
-                data.loc[country_impacted] = [mort_out, conc_out]
+                data.loc[country_impacted] = [mort_out, conc_mean_out, conc_sum_out, pop_weight_conc]
                 print(data)
             data.to_csv(f'Outputs/weighted_co2/C_out_{country_emit}_{runtype}_{pc}pct_{yr}yr.nc')
             print(f'saved out {country_emit}, {runtype}, {pc} percent, {yr} year')
@@ -407,7 +427,7 @@ elif annual_co2 == True:
     
     for yr in coal_year_range:
         for pc in percent:  
-            data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
+            data = pd.DataFrame(columns = ['Mortalities','BC_mean_Conc', 'BC_sum_conc','BC_pop_weight_mean_conc'], index = countries)
             #concentration
             #####start new#############
             C_conv = {}
@@ -464,20 +484,31 @@ elif annual_co2 == True:
             #heath impacts
             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
             for country_impacted in countries:
-                contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(country_impacted))
+                if country_impacted == 'East Timor':
+                        c_imp = 'Timor-Leste'
+                elif country_impacted == 'Solomon Islands':
+                    c_imp = 'Solomon Is.'
+                else:
+                    c_imp = country_impacted
+                contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(c_imp))
                 country_impacted_ds = C_out.where(contiguous_mask)
                 country_impacted_ds = country_impacted_ds.to_dataset(name = 'BC_conc')
                 country_area = ds_area['area'].where(contiguous_mask)
                 
                 country_impacted_ds['AF'] = (np.exp(beta*(country_impacted_ds['BC_conc']- ds_base)) - 1)#/np.exp(beta*(country_impacted_ds['BC_conc']- ds_base))
                 country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
-                
+
                 mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
-                conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+                conc_mean_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+                conc_sum_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values #take a mean to test
                 
-                
-                data.loc[country_impacted] = [mort_out, conc_out]
             
+                pop_weight_conc = utils.grouped_weighted_avg(country_impacted_ds['BC_conc'], regrid_area_ds['regrid_pop_count']).values
+                #pop_weight_mean_conc_out = ((pop_weight_conc*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+                #pop_weight_sum_conc_out = ((pop_weight_conc*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values #take a mean to test
+
+                data.loc[country_impacted] = [mort_out, conc_mean_out, conc_sum_out, pop_weight_conc]
+                            
             data.to_csv(f'Outputs/annual_co2/C_out_{country_emit}_{runtype}_{pc}pct_{yr}yr.nc')
             print(f'saved out {country_emit}, {runtype}, {pc} percent, {yr} year')
             lst = [data]
@@ -488,7 +519,7 @@ elif annual_co2 == True:
 elif age_retire == True:
     runtype = 'age'
     for yr in coal_year_range:
-        data = pd.DataFrame(columns = ['Mortalities','BC_Conc'], index = countries)
+        data = pd.DataFrame(columns = ['Mortalities','BC_mean_Conc', 'BC_sum_conc','BC_pop_weight_mean_conc'], index = countries)
         #concentration
         #####start new#############
         C_conv = {}
@@ -546,20 +577,33 @@ elif age_retire == True:
         #heath impacts
         mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
         for country_impacted in countries:
-            contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(country_impacted))
+            if country_impacted == 'East Timor':
+                c_imp = 'Timor-Leste'
+            elif country_impacted == 'Solomon Islands':
+                c_imp = 'Solomon Is.'
+            else:
+                c_imp = country_impacted
+            contiguous_mask = ~np.isnan(mask)& (mask == country_mask.map_keys(c_imp))
             country_impacted_ds = C_out.where(contiguous_mask)
             country_impacted_ds = country_impacted_ds.to_dataset(name ='BC_conc')
             country_area = ds_area['area'].where(contiguous_mask)
 
             country_impacted_ds['AF'] = (np.exp(beta*(country_impacted_ds['BC_conc']- ds_base)) - 1)#/np.exp(beta*(country_impacted_ds['BC_conc']- ds_base))
             country_impacted_ds['delta_I'] = country_impacted_ds['AF']*regrid_area_ds['regrid_pop_count']*I0_pop_df.loc[country_impacted]['I_obs']
-            print(country_impacted_ds['delta_I'].weighted(ds_area['area']).mean(dim = ['lat','lon']))
-            print(country_impacted_ds['BC_conc'].weighted(ds_area['area']).mean(dim = ['lat','lon']))
+            #print(country_impacted_ds['delta_I'].weighted(ds_area['area']).mean(dim = ['lat','lon']))
+            #print(country_impacted_ds['BC_conc'].weighted(ds_area['area']).mean(dim = ['lat','lon']))
+
             mort_out = ((country_impacted_ds['delta_I']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values
-            conc_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+            conc_mean_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+            conc_sum_out = ((country_impacted_ds['BC_conc']*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values #take a mean to test
 
 
-            data.loc[country_impacted] = [mort_out, conc_out]
+            
+            pop_weight_conc = utils.grouped_weighted_avg(country_impacted_ds['BC_conc'], regrid_area_ds['regrid_pop_count']).values
+            #pop_weight_mean_conc_out = ((pop_weight_conc*country_area).sum(dim = ['lat','lon'])/country_area.sum()).mean(dim = ['s']).values #take a mean to test
+            #pop_weight_sum_conc_out = ((pop_weight_conc*country_area).sum(dim = ['lat','lon'])/country_area.sum()).sum(dim = ['s']).values #take a mean to test
+
+            data.loc[country_impacted] = [mort_out, conc_mean_out, conc_sum_out, pop_weight_conc]
             print(data)
         data.to_csv(f'Outputs/retire_age/C_out_{country_emit}_{runtype}_{yr}yr.nc')
         print(f'saved out {country_emit}, {runtype}, {yr} year')

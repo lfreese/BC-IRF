@@ -35,8 +35,6 @@ sbatch regrid_gchp_stretched.py --cube_res 90  --lat 180  --lon 288  --month 8  
 sbatch regrid_gchp_stretched.py --cube_res 90  --lat 180  --lon 288  --month 10   --model_run stretch_base  --location template  --month_step Oct
 sbatch regrid_gchp_stretched.py --cube_res 90  --lat 180  --lon 288  --month 11  --model_run stretch_base  --location template  --month_step Oct
 
-
-test = xr.open_mfdataset(f'../GCrundirs/IRF_runs/stretch_2x_pulse/Jan_uncertainty_Indo/Jan6_pulse/mod_output/GEOSChem.AerosolMass.{time}*', combine = 'by_coords')
 sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 2 --model_run stretch_2x_pulse --location Jan_uncertainty_Indo --month_step Jan11_pulse
 
 
@@ -96,3 +94,16 @@ sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 2 --mo
 #
 sbatch regrid_gchp_stretched.py --cube_res 90  --lat 180  --lon 288  --month 3   --model_run stretch_2x_pulse  --location Jan_uncertainty_Indo  --month_step Jan26_pulse
 sbatch regrid_gchp_stretched.py --cube_res 90  --lat 180  --lon 288  --month 3  --model_run stretch_base  --location template  --month_step Jan26_pulse
+
+
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 1 --model_run stretch_step --location all_countries_cos --month_step Jan
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 2 --model_run stretch_step --location all_countries_cos --month_step Jan
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 1 --model_run stretch_step --location all_countries_add --month_step Jan
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 2 --model_run stretch_step --location all_countries_add --month_step Jan
+
+
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 1 --model_run stretch_step --location all_countries_add --month_step Jan
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 2 --model_run stretch_step --location all_countries_add --month_step Jan
+
+
+c

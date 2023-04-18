@@ -24,20 +24,20 @@ def combine_BC(ds):
     ds['EmisBC_Total'].attrs = {'full_name':'total black carbon','units':'g/m2/day'}
     
 def global_w_sum_vol(ds, variable):
-    """Takes the globally weighted sum of a dataset and its variable, as long as the dataset has a dz and area"""
-    return (ds[variable].weighted(ds['area']*ds['dz']).sum(dim = ['lat','lon','lev']))
+    """Takes the globally weighted sum of a dataset and its variable, as long as the dataset has a Altitude and area"""
+    return (ds[variable].weighted(ds['area']*ds['Altitude']).sum(dim = ['lat','lon','lev']))
 
 def global_w_sum_area(ds, variable):
-    """Takes the globally weighted sum of a dataset and its variable, as long as the dataset has a dz and area"""
+    """Takes the globally weighted sum of a dataset and its variable, as long as the dataset has a Altitude and area"""
     return (ds[variable].weighted(ds['area']).sum(dim = ['lat','lon']))
 
     
 def global_w_mean(ds, variable):
-    """Takes the globally weighted mean of a dataset and its variable, as long as the dataset has a dz and area"""
-    return (ds[variable].weighted(ds['area']*ds['dz']).mean(dim = ['lat','lon','lev']))
+    """Takes the globally weighted mean of a dataset and its variable, as long as the dataset has a Altitude and area"""
+    return (ds[variable].weighted(ds['area']*ds['Altitude']).mean(dim = ['lat','lon','lev']))
 
 def global_sfc_w_mean(ds, variable):
-    return (ds[variable].isel(lev = 0).weighted(ds['area']*ds['dz'].isel(lev = 0)).mean(dim = ['lat','lon']))
+    return (ds[variable].isel(lev = 0).weighted(ds['area']).mean(dim = ['lat','lon']))
 
 def fix_area_ij_latlon(ds):
     ds_area = ds['area']
@@ -156,6 +156,17 @@ def calc_δc_δt(ds, conc_species, run_delta_name, run_base_name):
 
     return(δc_δt)
 
+def calc_δc_δt_lev0_mean(ds, conc_species, run_delta_name, run_base_name):
+    '''take the backwards time difference for the concentration, adding in a 0th timestep with delta_c = 0 '''
+    ds['conc_dif'] = (global_sfc_w_mean(ds.sel(run = run_delta_name).fillna(0), conc_species)- 
+                            global_sfc_w_mean(ds.sel(run = run_base_name).fillna(0), conc_species))
+    time = pd.date_range((ds['time'][0]- np.timedelta64(24,'h')).values, freq='H', periods=1)
+    ds_0 = xr.Dataset({'conc_dif': ('time', [0]), 'time': time})
+    ds = xr.concat([ds_0,ds], dim = 'time')
+    
+    δc_δt = ds['conc_dif'].diff('time').fillna(0)/(ds['time'].diff('time')/(24*60*60*1e9)).astype('float64')
+    return(δc_δt)
+
 #### forcing to divide out ####
 
 def f_(raw_f, t_p): 
@@ -163,6 +174,10 @@ def f_(raw_f, t_p):
     return raw_f.interp({'time':t_p})
 
 
+######## weighted average ########
+
+def grouped_weighted_avg(values, weights):
+    return (values * weights).sum() / weights.sum()
 
 ######## height #####
 ## from http://wiki.seas.harvard.edu/geos-chem/index.php/GEOS-Chem_vertical_grids

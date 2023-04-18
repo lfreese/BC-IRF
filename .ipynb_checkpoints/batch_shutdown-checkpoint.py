@@ -3,16 +3,16 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=edr
 
+sbatch shutdowns_individual_plants.py --start_year 10 --end_year 45 --country 'MALAYSIA' 
+sbatch shutdowns_individual_plants.py --start_year 10 --end_year 45 --country 'INDONESIA' 
+sbatch shutdowns_individual_plants.py --start_year 10 --end_year 45 --country 'VIETNAM' 
+sbatch shutdowns_individual_plants.py --start_year 10 --end_year 45 --country 'CAMBODIA' 
 
-['MALAYSIA', 'INDONESIA', 'VIETNAM', 'SUM']
 
-sbatch shutdowns_GAINS.py --start_year 10 --end_year 40 --type 'weighted_co2' --country 'MALAYSIA' 
-sbatch shutdowns_GAINS.py --start_year 10 --end_year 40 --type 'weighted_co2' --country 'INDONESIA'
-sbatch shutdowns_GAINS.py --start_year 10 --end_year 40 --type 'weighted_co2' --country 'VIETNAM' ##submitted as a test
-sbatch shutdowns_GAINS.py --start_year 0 --end_year 40 --type 'annual_co2' --country 'MALAYSIA'
-sbatch shutdowns_GAINS.py --start_year 0 --end_year 40 --type 'annual_co2' --country 'INDONESIA'
-sbatch shutdowns_GAINS.py --start_year 0 --end_year 40 --type 'annual_co2' --country 'VIETNAM'
-sbatch shutdowns_GAINS.py --start_year 0 --end_year 40 --type 'age_retire' --country 'MALAYSIA'
-sbatch shutdowns_GAINS.py --start_year 0 --end_year 40 --type 'age_retire' --country 'INDONESIA'
-sbatch shutdowns_GAINS.py --start_year 0 --end_year 40 --type 'age_retire' --country 'VIETNAM'
+sbatch GF_mean_times_pt1.py --region 'Indo'
+sbatch GF_mean_times_pt1.py --region 'Malay'
+sbatch GF_mean_times_pt1.py --region 'all_countries'
+sbatch GF_mean_times_pt1.py --region 'Viet'
+sbatch GF_mean_times_pt1.py --region 'Cambod'
+
 
