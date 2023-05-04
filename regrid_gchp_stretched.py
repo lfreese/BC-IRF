@@ -47,7 +47,7 @@ month_step = args.month_step
 print(location)
 #create paths to data
 regrid_path = "/net/fs11/d0/emfreese/GCrundirs/IRF_runs/regrid_files/"
-weights_file = f"esmf_regrid_weights_c{cube_res}_s2_11_112_to_latlon{lat}x{lon}.nc"#f"esmf_regrid_weights_c{cube_res}_to_latlon{lat}x{lon}.nc"
+weights_file = f"esmf_regrid_weights_c{cube_res}_s2_11_112_to_latlon{lat}x{lon}.nc"
 reg_latlon = f"regular_lat_lon_{lat}x{lon}.nc"
 
 

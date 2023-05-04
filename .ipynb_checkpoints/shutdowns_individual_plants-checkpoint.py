@@ -168,45 +168,40 @@ G = xr.open_dataarray('Outputs/G_combined_new.nc', chunks = 'auto')
 dt = 1 #day
 
 G_lev0 = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).isel(lev = 0).compute()
-G_lev0 = G_lev0.rename({'time':'s'})
-
+G_lev0 = G_lev0.where((G_lev0 > 0), drop = True).rename({'time':'s'})
 print('G prepped')
+
 ############################################
 
-def np_to_xr(C, G, E):
-    E_len = len(E)
-    G_len = len(G.s)
+def np_to_xr_time_specific(C, G, E, time_init):
     C = xr.DataArray(
     data = C,
     dims = ['s','lat','lon'],
     coords = dict(
-        s = (['s'], np.arange(0, C.shape[0])), #np.arange(0,(E_len+G_len))),
+        s = (['s'], np.arange(time_init, C.shape[0] + time_init)), 
         lat = (['lat'], G.lat.values),
         lon = (['lon'], G.lon.values)
             )
         )
     return(C)
+##############################################
 
-
-
-################old code ######################
-
-
-for yr in coal_year_range:
-    processes = []
-    for unique_id in CGP_df['unique_ID']:   #active
+for unique_id in CGP_df['unique_ID']:
+    print(unique_id, 'id')
+    for yr in coal_year_range:
+        print(yr, 'year')
         data = pd.DataFrame(columns = ['BC_mean_Conc','BC_pop_weight_mean_conc'], index = countries)
         #concentration
         #####start new#############
         C_conv = {}
         C_init = {}
-        yr_range = coal_year_range
-        n = 0
+        yr_range = np.unique([int(i/365) for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])
+        n = np.unique([int(i) for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])[0]
         for yr_num in yr_range:
             n_init = n
 
             for idx, season in enumerate(season_days.keys()):
-                C_conv[season] = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx]).dropna(dim = 's'), 
+                C_conv[season] = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx]).fillna(0), 
                              E_CO2_all_opts[yr][unique_id][n:n+season_days[season]][..., None, None], mode = 'full')
                 #switch the tail (that goes into the following months) to follow the GF of the next month 
                 if idx == 0 or idx == 1 or idx == 2:
@@ -214,7 +209,7 @@ for yr in coal_year_range:
                 elif idx == 3:
                     idx_next = 0
 
-                tail_switch = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx_next]).dropna(dim = 's'), 
+                tail_switch = signal.convolve(G_lev0.sel(run = country_emit_dict[country_emit][idx_next]).fillna(0), 
                                      E_CO2_all_opts[yr][unique_id][n:n+season_days[season]][..., None, None], mode = 'full')
 
                 C_conv[season][season_days[season]:tail_switch[season_days[season]:C_conv[season].shape[0]].shape[0]+season_days[season]] = tail_switch[season_days[season]:C_conv[season].shape[0]]
@@ -236,10 +231,11 @@ for yr in coal_year_range:
                                                 (len(E_CO2_all_opts[yr][unique_id]) - season_days['DJF'] - season_days['MAM'] - season_days['JJA'] - len(C_conv['SON']) - (n_init)))),
                                               (0,0),(0,0)))))
             C_init[yr_num] = C['DJF']+C['MAM']+C['JJA']+C['SON']
-
+            print(C_init[yr_num].shape)
+            #print(C_init[yr_num].sum())
         C_sum = sum(C_init[yr_num] for yr_num in yr_range)
         C_dense = sparse.COO.todense(C_sum)
-        C_out = np_to_xr(C_dense, G_lev0, E_CO2_all_opts[yr][unique_id])
+        C_out = np_to_xr_time_specific(C_dense, G_lev0, E_CO2_all_opts[yr][unique_id], time_init = np.unique([int(i/365) for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])[0])
 
         ### country level impacts ###
         mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
@@ -265,6 +261,8 @@ for yr in coal_year_range:
         print(f'saved out {country_emit}, {unique_id} unique id, {yr} year')
         print(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
         lst = [data]
+        del C_init
+        del C_sum
         del data
         del lst
         gc.collect()

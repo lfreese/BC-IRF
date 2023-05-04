@@ -106,4 +106,5 @@ sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 1 --mo
 sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 2 --model_run stretch_step --location all_countries_add --month_step Jan
 
 
-c
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 1 --model_run stretch_step --location Indo_cos --month_step Jan
+sbatch regrid_gchp_stretched.py --cube_res 90 --lat 180 --lon 288 --month 2 --model_run stretch_step --location Indo_cos --month_step Jan

@@ -93,6 +93,21 @@ def np_to_xr(C, G, E):
         )
     return(C)
 
+def np_to_xr_time_specific(C, G, E, time_init):
+    E_len = len(E)
+    G_len = len(G.s)
+    C = xr.DataArray(
+    data = C,
+    dims = ['s','lat','lon'],
+    coords = dict(
+        s = (['s'], np.arange(time_init, C.shape[0])), #np.arange(0,(E_len+G_len))),
+        lat = (['lat'], G.lat.values),
+        lon = (['lon'], G.lon.values)
+            )
+        )
+    return(C)
+
+
 def np_to_xr_mean(C, G, E):
     E_len = len(E)
     G_len = len(G.s)

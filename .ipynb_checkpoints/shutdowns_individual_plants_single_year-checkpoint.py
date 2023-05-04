@@ -43,15 +43,12 @@ import sparse
 ################## Parse arguments and set constants ##############
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--start_year', type=int, required=True)
-parser.add_argument('--end_year', type=int, required=True)
 parser.add_argument('--country_emit', type=str, required=True)
 args = parser.parse_args()
-print('Start year', args.start_year, 'End year', args.end_year, 'Country of emissions', args.country_emit)
+print('Country of emissions', args.country_emit)
 
 
 years = 50
-coal_year_range = np.arange(args.start_year, args.end_year)[::5]
 
 country_emit = args.country_emit
 
@@ -150,10 +147,10 @@ def individual_plant_shutdown(years_running, df, time_array, typical_shutdown_ye
 ########## Create emissions profile for each plant over our shutdown times ##########
 
 E_CO2_all_opts = {}
-for year in coal_year_range:
-    E_CO2_all_opts[year] = {}
-    for unique_id in CGP_df['unique_ID'].values:
-        E_CO2_all_opts[year][unique_id] = individual_plant_shutdown(year, CGP_df, time_array, 40, unique_id)
+year = 1
+E_CO2_all_opts[year] = {}
+for unique_id in CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID'].values:
+    E_CO2_all_opts[year][unique_id] = individual_plant_shutdown(year, CGP_df, time_array, 40, unique_id)
 print('Emissions profiles based on weighted capacity of CO2 emissions percentiles created')
 
 
@@ -186,18 +183,22 @@ def np_to_xr_time_specific(C, G, E, time_init):
     return(C)
 ##############################################
 
-for unique_id in CGP_df['unique_ID']:
-    print(unique_id, 'id')
+yr = 1
+coal_year_range = [1]
+for unique_id in [49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 71, 74, 75, 79, 80, 81, 83, 84, 85, 90, 91, 92, 93, 94, 95, 96, 98, 99, 100, 103, 104, 105, 106, 111, 112, 114, 115, 116, 117, 118, 119, 120, 121, 126, 127, 128, 129, 133, 134, 135, 136, 137, 138, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171]:#CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID']:
+    print(unique_id)
     for yr in coal_year_range:
-        print(yr, 'year')
+        print(yr)
         data = pd.DataFrame(columns = ['BC_mean_Conc','BC_pop_weight_mean_conc'], index = countries)
         #concentration
         #####start new#############
         C_conv = {}
         C_init = {}
-        yr_range = np.unique([int(i/365) for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])
+        yr_range = np.unique([int(i/365) for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])[0]
+        print(yr_range, 'year range')
         n = np.unique([int(i) for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])[0]
-        for yr_num in yr_range:
+        for yr_num in [yr_range]:
+            print(n, 'n')
             n_init = n
 
             for idx, season in enumerate(season_days.keys()):
@@ -218,25 +219,23 @@ for unique_id in CGP_df['unique_ID']:
 
             C = {}
 
-            C['DJF'] = sparse.COO.from_numpy((np.pad(C_conv['DJF'],((((n_init),
-                                               (len(E_CO2_all_opts[yr][unique_id]) - len(C_conv['DJF']) - (n_init)))),
-                                             (0,0),(0,0)))))
-            C['MAM'] = sparse.COO.from_numpy((np.pad(C_conv['MAM'],((((season_days['DJF'] + (n_init)),
-                                               (len(E_CO2_all_opts[yr][unique_id]) - season_days['DJF'] - len(C_conv['MAM']) - (n_init)))),
-                                             (0,0),(0,0)))))
-            C['JJA'] = sparse.COO.from_numpy((np.pad(C_conv['JJA'],(((season_days['DJF'] + season_days['MAM'] + (n_init),
-                                               (len(E_CO2_all_opts[yr][unique_id]) - season_days['DJF'] - season_days['MAM'] - len(C_conv['JJA']) - (n_init)))),
-                                             (0,0),(0,0)))))
-            C['SON'] = sparse.COO.from_numpy((np.pad(C_conv['SON'], (((season_days['DJF'] + season_days['MAM'] + season_days['JJA'] + (n_init),
-                                                (len(E_CO2_all_opts[yr][unique_id]) - season_days['DJF'] - season_days['MAM'] - season_days['JJA'] - len(C_conv['SON']) - (n_init)))),
-                                              (0,0),(0,0)))))
+            C['DJF'] = sparse.COO.from_numpy(np.pad(C_conv['DJF'],((((0),
+                                               (365 - len(C_conv['DJF'])))),
+                                             (0,0),(0,0))))
+            C['MAM'] = sparse.COO.from_numpy(np.pad(C_conv['MAM'],((((season_days['DJF']),
+                                               (365 - season_days['DJF'] - len(C_conv['MAM'])))),
+                                             (0,0),(0,0))))
+            C['JJA'] = sparse.COO.from_numpy(np.pad(C_conv['JJA'],((((season_days['DJF'] + season_days['MAM'] ),
+                                               (365 - season_days['DJF'] - season_days['MAM'] - len(C_conv['JJA'])))),
+                                             (0,0),(0,0))))
+            C['SON'] = sparse.COO.from_numpy(np.pad(C_conv['SON'][:season_days['SON']], ((((season_days['DJF'] + season_days['MAM'] + season_days['JJA']),
+                                                (365 - season_days['DJF'] - season_days['MAM'] - season_days['JJA'] - len(C_conv['SON'][:season_days['SON']])))),
+                                              (0,0),(0,0))))
             C_init[yr_num] = C['DJF']+C['MAM']+C['JJA']+C['SON']
-            print(C_init[yr_num].shape)
-            #print(C_init[yr_num].sum())
-        C_sum = sum(C_init[yr_num] for yr_num in yr_range)
-        C_dense = sparse.COO.todense(C_sum)
-        C_out = np_to_xr_time_specific(C_dense, G_lev0, E_CO2_all_opts[yr][unique_id], time_init = np.unique([int(i/365) for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])[0])
 
+        C_sum = C_init[yr_num]
+        C_dense = sparse.COO.todense(C_sum)
+        C_out = np_to_xr_time_specific(C_dense, G_lev0, E_CO2_all_opts[yr][unique_id], time_init = np.unique([i for i, x in enumerate(E_CO2_all_opts[yr][unique_id]>0) if x])[0])
         ### country level impacts ###
         mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')
         for country_impacted in countries:
@@ -257,14 +256,14 @@ for unique_id in CGP_df['unique_ID']:
           
             data.loc[country_impacted] = [conc_mean_out, pop_weight_conc]
             print(data)
-        data.to_csv(f'Outputs/individual_shutdowns/C_out_{country_emit}_{unique_id}_uniqueid_{yr}_yr.nc')
-        print(f'saved out {country_emit}, {unique_id} unique id, {yr} year')
-        print(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
-        lst = [data]
-        del C_init
-        del C_sum
-        del data
-        del lst
-        gc.collect()
-        print(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
+    data.to_csv(f'Outputs/individual_shutdowns/single_year/C_out_{country_emit}_{unique_id}_uniqueid_single_yr.nc')
+    print(f'saved out {country_emit}, {unique_id} unique id, {yr} year')
+    print(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
+    lst = [data]
+    del C_init
+    del C_sum
+    del data
+    del lst
+    gc.collect()
+    print(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
 
