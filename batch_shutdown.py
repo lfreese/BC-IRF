@@ -20,7 +20,7 @@ sbatch shutdowns_individual_plants.py --start_year 15 --end_year 20 --country 'I
 sbatch shutdowns_individual_plants.py --start_year 30 --end_year 45 --country 'INDONESIA' 
 
 
-sbatch shutdowns_individual_plants_single_year-Copy1.py --country 'MALAYSIA' 
+sbatch shutdowns_individual_plants_single_year.py --country 'MALAYSIA' 
 sbatch shutdowns_individual_plants_single_year.py --country 'INDONESIA' 
 sbatch shutdowns_individual_plants_single_year.py --country 'VIETNAM' 
 sbatch shutdowns_individual_plants_single_year.py --country 'CAMBODIA' 

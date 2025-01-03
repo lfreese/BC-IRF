@@ -194,11 +194,21 @@ pressure_ds = (pressure.loc[~pressure['L'].isna()].set_index(np.arange(72,0,-1))
 
 
 
+#### GF mean times ####
+
+def ppb_to_ug(ds, species_to_convert, mw_species_list, P, T):
+    '''Convert species to ug/m3 from ppb'''
+    R = 8.314 #J/K/mol
+    mol_per_m3= (P / (T * R)) #Pa/K/(J/K/mol) = mol/m3
+    
+    for spec in species_to_convert:
+        attrs = ds[spec].attrs
+        ds[spec] = ds[spec]*mw_species_list[spec]*mol_per_m3*1e-3 #ppb*g/mol*mol/m3*ug/ng
+        ds[spec].attrs['units'] = 'μg m-3'
 
 
-
-
-
+def exponential_decay(a, b, N):
+    return a * (1-b) ** np.arange(N)
 
 ########## Convolution #########
 

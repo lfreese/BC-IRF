@@ -28,7 +28,7 @@ video_countries.ipynb: create videos of country level pollution
 
 ### Green's Functions
 GF_mean_times.py: create the GF
-GF_mean_times.ipynb: original notebook to create GF/for testing
+GF_mean_times_combine_all.ipynb: combine all GF from the .py runs, and add units (ug/m3 per g/m2/day)
 GF_mean_times-plotting.ipynb: plot our GF for comparisons
 GF_pulse_vs_step.ipynb: methods testing of a step vs. pulse-- important for comparison to source receptor
 

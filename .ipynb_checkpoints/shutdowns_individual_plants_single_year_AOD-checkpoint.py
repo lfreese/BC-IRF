@@ -185,7 +185,7 @@ def np_to_xr_time_specific(C, G, E, time_init):
 
 yr = 1
 coal_year_range = [1]
-for unique_id in [ 82, 132]:#CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID']:
+for unique_id in CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID']:
     print(unique_id)
     for yr in coal_year_range:
         print(yr)
