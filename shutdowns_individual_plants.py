@@ -63,12 +63,8 @@ time_array = np.arange(0, length_simulation)
 season_days = {'DJF': 90, 'MAM':92, 'JJA':92, 'SON':91}
 
 
-## import the china global powerplant database
-### Gallagher, Kevin P. (2021), “China’s Global Energy Finance,” Global Development Policy Center, Boston University.
-### Gallagher, Kevin P., Li, Zhongshu, Chen, Xu, Ma, Xinyue (2019), “China’s Global Power Database,” Global Development Policy Center, Boston University.
-
+## import the powerplant data
 CGP_df = pd.read_csv('mod_coal_inputs/BC_limited_country_SEA_GAINS_Springer.csv')
-
 
 CGP_df.columns = CGP_df.columns.str.replace(' ', '_')
 

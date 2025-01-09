@@ -30,8 +30,6 @@ from numba import guvectorize, float64, int64, void
 
 import scipy.signal as signal
 
-####### This must be run before shutdowns_GAINS to supply the gridded population data
-
 
 #### import our dataset for population density ####
 pop_ds = xr.open_dataset("/net/fs11/d0/emfreese/population_data/gpw-v4-population-density-adjusted-to-2015-unwpp-country-totals-rev11_totpop_2pt5_min_nc/gpw_v4_population_density_adjusted_rev11_2pt5_min.nc").sel(raster = 4) #density in persons / sq km
@@ -89,7 +87,7 @@ def make_2d_grid(lon_b1, lon_b2, lon_step, lat_b1, lat_b2, lat_step):
                     }
                    )
     return(ds)
-ds = xr.open_dataarray('Outputs/G_all_loc_all_times_BC_total.nc4', chunks = 'auto')
+ds = xr.open_dataarray('../../data_output/greens_functions/G_combined.nc4', chunks = 'auto')
 
 #make a ds with grid for output and grid for input 
 lat_dif = ds.lat.diff(dim = 'lat')[0].values
@@ -127,6 +125,6 @@ regrid_area_ds['regrid_pop_count'] = regrid_area_ds['regrid_land_area'] * regrid
 #### check that we still have ~7 billion population ####
 print(regrid_area_ds['regrid_pop_count'].sum(), orig_ds['orig_pop_count'].sum())
 
-regrid_area_ds.to_netcdf('Outputs/regridded_population_data.nc', mode='w')
+regrid_area_ds.to_netcdf('../../data_output/convolution/regridded_population_data.nc', mode='w')
 
 print('saved')

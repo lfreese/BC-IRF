@@ -61,7 +61,7 @@ season_days = {'DJF': 90, 'MAM':92, 'JJA':92, 'SON':91}
 
 
 ## import the china global powerplant database from Springer et al.
-CGP_df = pd.read_csv('mod_coal_inputs/BC_SE_Asia_all_financing_SEA_GAINS_Springer.csv')
+CGP_df = pd.read_csv('../../data_output/plants/BC_SE_Asia_all_financing_SEA_GAINS_Springer.csv')
 
 CGP_df.columns = CGP_df.columns.str.replace(' ', '_')
 
@@ -76,14 +76,14 @@ print('Emis data prepped and loaded')
 ######## Country mask and dataframe ######
 
 country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_50
-country_df = geopandas.read_file('ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
+country_df = geopandas.read_file('../../raw_data_inputs/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
 countries = ['China','Australia', 'India','Myanmar', 'Cambodia', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan','Brunei','Singapore', 'Papua New Guinea', 'Solomon Islands', 'East Timor', 'Taiwan']
 country_df = country_df.rename(columns = {'SOVEREIGNT':'country'})
 
 ds_area = xr.open_dataset('/net/fs11/d0/emfreese/GCrundirs/IRF_runs/stretch_2x_pulse/SEA/Jan/mod_output/GEOSChem.SpeciesConc.20160101_0000z.nc4', engine = 'netcdf4')
 utils.fix_area_ij_latlon(ds_area);
 
-regrid_area_ds = xr.open_dataset('Outputs/regridded_population_data.nc')
+regrid_area_ds = xr.open_dataset('../../data_output/convolution/regridded_population_data.nc')
 
 
 ####### Functions #########
@@ -121,7 +121,7 @@ country_emit_dict = {'INDONESIA':['Indo_Jan', 'Indo_Apr', 'Indo_July','Indo_Oct'
                'MALAYSIA': ['Malay_Jan','Malay_Apr','Malay_July','Malay_Oct'], 'VIETNAM': ['Viet_Jan','Viet_Apr','Viet_July','Viet_Oct']}
 
 #import the green's function and set our time step
-G = xr.open_dataarray('Outputs/G_combined_new.nc', chunks = 'auto')
+G = xr.open_dataarray('../../data_output/greens_functions/GF_combined.nc', chunks = 'auto')
 
 #column sum Green's function, only select our country of emissions
 G_column_sum = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).sum(dim = 'lev').compute()
@@ -228,7 +228,7 @@ for unique_id in CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID']: #loop over ea
                     data.loc[country_impacted, 'BC_column_mean_conc'] = conc_mean_out
 
                 print(data)
-    data.to_csv(f'Outputs/individual_shutdowns/final_out_convolution/C_out_{country_emit}_{unique_id}_uniqueid_single_yr.nc')
+    data.to_csv(f'../../data_output/convolution/convolution_{country_emit}_{unique_id}_uniqueid.nc')
     print(f'saved out {country_emit}, {unique_id} unique id, single year')
     print(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
     lst = [data]

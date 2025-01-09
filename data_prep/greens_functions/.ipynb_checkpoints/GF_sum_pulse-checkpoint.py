@@ -2,37 +2,20 @@
 #SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=edr
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-user=emfreese@mit.edu
+
 
 import xarray as xr
-import matplotlib.pyplot as plt
-
-
 import numpy as np
-import cartopy.crs as ccrs
-import cartopy.feature as cfeat
-import regionmask
-import pandas as pd
-from datetime import datetime, timedelta
-import utils
-from matplotlib.colors import SymLogNorm
-import xesmf as xe
-from matplotlib import pyplot as plt, animation
-from IPython.display import HTML, display
-
-
-import itertools
-
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection, PolyCollection
 import numpy as np
-
-import cartopy.feature
-from cartopy.mpl.patch import geos_to_path
-import cartopy.crs as ccrs
-
+import argparse
 import dask
 dask.config.set(**{'array.slicing.split_large_chunks': True})
+import sys
+sys.path.insert(0, '/net/fs11/d0/emfreese/BC-IRF/')
+import utils
+
 
 regions = ['SEA', 'Indo','Malay','all_countries','Viet','Cambod']
 months = ['Jan','Apr','July', 'Oct'] #options are Jan, Apr, July, Oct
@@ -40,36 +23,40 @@ time = '2016'
 length_simulation = 60 #days
 diagnostic = 'SpeciesConc'
 
+
+##Import our monthly data
+
 dict_conc = {}
 dict_emis = {}
 
-##Import base data
+##Import the pulse data
+pulse_size = '2x'
+for r in regions:
+    for m in months:
+        print(m)
+        print(r)
+        #2x pulse for GF
+        dict_conc[r + '_' + m] = xr.open_mfdataset(f'{utils.geos_chem_data_path}stretch_{pulse_size}_pulse/{r}/{m}/mod_output/GEOSChem.SpeciesConc.{time}*', combine = 'by_coords')
+        #2x pulse for GF
+        dict_emis[r + '_' + m] = xr.open_mfdataset(f'{utils.geos_chem_data_path}stretch_{pulse_size}_pulse/{r}/{m}/mod_output/GEOSChem.Emissions.{time}*', combine = 'by_coords')
+        if (dict_conc[r + '_' + m]['time'].diff('time').astype('float64') > 86400000000000).any():
+            print('CHECK TIME, FAILED')
+            
+##Import the base data
 for m in months:
-    dict_conc[f'base_{m}'] = xr.open_mfdataset(f'../GCrundirs/IRF_runs/stretch_base/template/{m}/mod_output/GEOSChem.SpeciesConc.{time}*', combine = 'by_coords', engine = 'netcdf4')
-    dict_emis[f'base_{m}'] = xr.open_mfdataset(f'../GCrundirs/IRF_runs/stretch_base/template/{m}/mod_output/GEOSChem.Emissions.{time}*', combine = 'by_coords', engine = 'netcdf4')
+    dict_conc[f'base_{m}'] = xr.open_mfdataset(f'{utils.geos_chem_data_path}stretch_base/template/{m}/mod_output/GEOSChem.SpeciesConc.{time}*', combine = 'by_coords', engine = 'netcdf4')
+    dict_emis[f'base_{m}'] = xr.open_mfdataset(f'{utils.geos_chem_data_path}stretch_base/template/{m}/mod_output/GEOSChem.Emissions.{time}*', combine = 'by_coords', engine = 'netcdf4')
     if (dict_conc[f'base_{m}']['time'].diff('time').astype('float64') > 86400000000000).any():
             print('CHECK TIME, FAILED')
 
 
-
-##Import Data across Indonesia location comparisons
-
-
-locations = ['Center','NW','SE']
-pulse_size = '2x'
-for loc in locations:
-    print(loc)
-    #2x pulse for GF
-    dict_conc['Indo_Jan_' + loc] = xr.open_mfdataset(f'../GCrundirs/IRF_runs/stretch_{pulse_size}_pulse/loc_uncertainty_Indo/{loc}_pulse/mod_output/GEOSChem.SpeciesConc.{time}*', combine = 'by_coords')
-    #2x pulse for GF
-    dict_emis['Indo_Jan_' + loc] = xr.open_mfdataset(f'../GCrundirs/IRF_runs/stretch_{pulse_size}_pulse/loc_uncertainty_Indo/{loc}_pulse/mod_output/GEOSChem.Emissions.{time}*', combine = 'by_coords')
-    if (dict_conc['Indo_Jan_' + loc]['time'].diff('time').astype('float64') > 86400000000000).any():
-        print('CHECK TIME, FAILED-- Check the regridding as not all times were regridded')
+#Sum data across regions
+for m in months:
+    dict_conc[f'all_countries_summed_{m}'] = dict_conc[f'Indo_{m}'] + dict_conc[f'Malay_{m}'] + dict_conc[f'Viet_{m}'] + dict_conc[f'Cambod_{m}']
 
 print('Data imported')
 
 ### Make dataset and modify time
-
 #shift our time so that it is halfway through the day to represent the daily mean
 for i in dict_emis.keys():
     utils.switch_conc_time(dict_emis[i])
@@ -111,9 +98,14 @@ dt = 1 #day
 
 ### initial forcing
 f0 = {}
-for d in locations:
-    f0['Indo_Jan_' + d] = (dict_emis['Indo_Jan_' + d]['EmisBC_Total'].weighted(dict_emis['Indo_Jan_' + d]['area']).sum(dim = ['lat','lon']) - 
-            dict_emis['base_Jan']['EmisBC_Total'].weighted(dict_emis['base_Jan']['area']).sum(dim = ['lat','lon'])).isel(lev = -1).isel(time = 0).values
+for r in regions:
+    for m in months:
+        f0[r + '_' + m] = (dict_emis[r + '_' + m]['EmisBC_Total'].weighted(dict_emis[r + '_' + m]['area'].fillna(0)).sum(dim = ['lat','lon']) - 
+                dict_emis[f'base_{m}']['EmisBC_Total'].weighted(dict_emis[f'base_{m}']['area'].fillna(0)).sum(dim = ['lat','lon'])).isel(lev = -1).isel(time = 0).values ## multiply by area and time (1 day)
+
+for m in months:
+    f0[f'all_countries_summed_{m}'] = f0[f'Indo_{m}'] + f0[f'Malay_{m}'] + f0[f'Viet_{m}'] + f0[f'Cambod_{m}']
+
 
 print('F0, initial forcing, complete')
 
@@ -149,15 +141,23 @@ gc.collect()
 G_dict = {}
 regions = ['SEA', 'Indo','Malay','all_countries','Viet','Cambod']
     
+for r in regions:
+    for m in months:
+        G_dict[r + '_' + m] = (dict_conc[r + '_' + m]-dict_conc[f'base_{m}'])['BC_total']/f0[r + '_' + m]
 
-for d in locations:
-    G_dict['Indo_Jan_' + d] = (dict_conc['Indo_Jan_' + d]-dict_conc[f'base_Jan'])['BC_total']/f0['Indo_Jan_' + d]
+for m in months:
+    G_dict[f'all_countries_summed_{m}'] = (((dict_conc['Indo_' + m]-dict_conc[f'base_{m}'])['BC_total']+ 
+                                          (dict_conc['Malay_' + m]-dict_conc[f'base_{m}'])['BC_total']+
+                                          (dict_conc['Viet_' + m]-dict_conc[f'base_{m}'])['BC_total']+
+                                          (dict_conc['Cambod_' + m]-dict_conc[f'base_{m}'])['BC_total'])/
+                                           (f0['Indo_Jan'] + f0['Viet_Jan'] + f0['Malay_Jan'] + f0['Cambod_Jan']))
+
 print('Calculated GF')
 
 
 ### Add tail to zero based on the mean at that level
 full_ds = {}
-for r in G_dict.keys():
+for r in ['all_countries_summed_Jan','all_countries_summed_Apr','all_countries_summed_July','all_countries_summed_Oct']:
     exp_decay = utils.exponential_decay(1, 0.5, 13)
     exp_decay = np.append(exp_decay, 0)
     dates = pd.date_range(start='1/1/2018', end='1/14/2018')
@@ -165,9 +165,10 @@ for r in G_dict.keys():
     exp_da = xr.DataArray(data = exp_decay,
                  dims = ['time'],
                  coords = dict(time=times))
+    #exp_app = G_dict[r].isel(time = -1)*exp_da
     full_ds[r] = xr.concat([G_dict[r], G_dict[r].isel(time = -1)*exp_da], dim = 'time')
 
 ### Save out the Green's function
-xr.concat([full_ds[r] for r in full_ds.keys()], pd.Index([r for r in full_ds.keys()], name='run')).to_netcdf(f'Outputs/new_G_all_loc_all_times_{poll_name}_pt3.nc4', mode = 'w')
+xr.concat([full_ds[r] for r in full_ds.keys()], pd.Index([r for r in full_ds.keys()], name='run')).to_netcdf(f'{utils.data_output_path}/greens_functions/Greens_function_{poll_name}_sum_pulse.nc4', mode = 'w')
 
 
