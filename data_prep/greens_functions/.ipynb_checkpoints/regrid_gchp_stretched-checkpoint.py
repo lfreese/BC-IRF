@@ -1,6 +1,6 @@
 #!/home/emfreese/anaconda3/envs/gchp/bin/python
-#SBATCH --time=01:10:00
-#SBATCH --cpus-per-task=2
+#SBATCH --time=00:30:00
+#SBATCH --cpus-per-task=1
 #SBATCH --partition=fdr
 
 import os
@@ -52,31 +52,63 @@ reg_latlon = f"regular_lat_lon_{lat}x{lon}.nc"
 
 
 #select date ranges
-if month == 1 or month == 3 or month == 5 or month == 7 or month == 8 or month == 10 or month == 12:
-    dates = np.arange(1,32)
 
-elif month == 2:
+if month_step == 'Jan6_pulse': 
+    if month == 1:
+        dates = np.arange(6,32)
+    if month == 3:
+        dates = np.arange(1,6)
+        
+elif month_step == 'Jan11_pulse': 
+    if month == 1:
+        dates = np.arange(11,32)
+    if month ==3:
+        dates = np.arange(1,11)
+
+elif month_step == 'Jan16_pulse':  
+    if month == 1:
+        dates = np.arange(16, 32)
+    if month == 3:
+        dates = np.arange(1,16)
+
+elif month_step == 'Jan21_pulse' :
+    if month == 1:
+        dates = np.arange(21, 32)
+    if month == 3:
+        dates = np.arange(1, 21)
+        
+elif month_step == 'Jan26_pulse':
+    if month == 1:
+        dates = np.arange(26, 32)
+    if month == 3:
+        dates = np.arange(1, 26)
+    
+elif month_step != 'Jan26_pulse' or month_step != 'Jan21_pulse' or month_step != 'Jan16_pulse' or month_step != 'Jan11_pulse' or month_step != 'Jan6_pulse':
+    if month == 1 or month == 3 or month == 5 or month == 7 or month == 8 or month == 10 or month == 12:
+        dates = np.arange(1,32)
+    
+# elif month_step == 'Jan6_pulse' and month == 3:
+#     dates = np.arange(1,7)
+    
+# elif month_step == 'Jan11_pulse' and month == 3:
+#     dates = np.arange(1,12)
+
+# elif month_step == 'Jan16_pulse' and month == 3:
+#     dates = np.arange(1, 17)
+
+# elif month_step == 'Jan21_pulse' and month == 3:
+#     dates = np.arange(1, 22)
+
+# elif month_step == 'Jan26_pulse' and month == 3:
+#     dates = np.arange(1, 27)
+
+if month == 2:
     dates = np.arange(1, 30)
     
-else:
+if month == 4 or month == 6 or month == 9 or month == 11:
     dates = np.arange(1,31)
 print(dates)
 
-
-# #select date ranges
-# if month_step == 'Jan11_pulse':
-#     dates = np.arange(11,32)
-
-# elif month_step == 'Jan16_pulse':
-#     dates = np.arange(16, 32)
-
-# elif month_step == 'Jan21_pulse':
-#     dates = np.arange(21, 32)
-
-# elif month_step == 'Jan26_pulse':
-#     dates = np.arange(26, 32)
-
-print(dates)
 
 filenames = [
     f"GEOSChem.SpeciesConc.2016{str(month).zfill(2)}{str(date).zfill(2)}_0000z.nc4" for date in dates
@@ -122,6 +154,7 @@ def main():
         output_file = os.path.join(destination_path, filename)
         with ProgressBar():
              ds_new.load().to_netcdf(output_file)
+        print(filename)
 
 
 ############ Run the function ############

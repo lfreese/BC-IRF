@@ -19,6 +19,12 @@ raw_data_in_path = '/net/fs11/d0/emfreese/BC-IRF/raw_data_inputs/'
 data_prep_path = '/net/fs11/d0/emfreese/BC-IRF/data_prep/'
 geos_chem_data_path = '/net/fs11/d0/emfreese/GCrundirs/IRF_runs/'
 figures_data_path = '/net/fs11/d0/emfreese/BC-IRF/figures/'
+
+
+
+################## Constants #################
+years = 60
+
 ################ General functions ################
 def combine_BC(ds):
     """Combines BCPI and BCPO and converts it to emissions in g/m2/day"""
@@ -189,16 +195,14 @@ def f_(raw_f, t_p):
 
 def grouped_weighted_avg(values, weights):
     return (values * weights).sum() / weights.sum()
+# ######## height #####
+# ## from http://wiki.seas.harvard.edu/geos-chem/index.php/GEOS-Chem_vertical_grids
+# height = pd.read_excel('/net/fs11/d0/emfreese/BC-IRF/GC_lev72.xlsx')
+# height_ds = (height.loc[height['L'].isna()].diff().set_index(np.arange(73,0,-1))['Altitude'].dropna()[::-1].to_xarray().rename({'index':'lev'})*-1e3).sortby('lev')
 
-######## height #####
-## from http://wiki.seas.harvard.edu/geos-chem/index.php/GEOS-Chem_vertical_grids
-height = pd.read_excel('/net/fs11/d0/emfreese/BC-IRF/GC_lev72.xlsx')
-height_ds = (height.loc[height['L'].isna()].diff().set_index(np.arange(73,0,-1))['Altitude'].dropna()[::-1].to_xarray().rename({'index':'lev'})*-1e3).sortby('lev')
 
-
-pressure = pd.read_excel('/net/fs11/d0/emfreese/BC-IRF/GC_lev72.xlsx')
-pressure_ds = (pressure.loc[~pressure['L'].isna()].set_index(np.arange(72,0,-1))['Pressure']*100).to_xarray().rename({'index':'lev'}).sortby('lev')
-
+# pressure = pd.read_excel('/net/fs11/d0/emfreese/BC-IRF/GC_lev72.xlsx')
+# pressure_ds = (pressure.loc[~pressure['L'].isna()].set_index(np.arange(72,0,-1))['Pressure']*100).to_xarray().rename({'index':'lev'}).sortby('lev')
 
 
 
@@ -217,3 +221,37 @@ def ppb_to_ug(ds, species_to_convert, mw_species_list, P, T):
 
 def exponential_decay(a, b, N):
     return a * (1-b) ** np.arange(N)
+
+####### Plant Shutdowns #########
+
+####### Functions #########
+
+def individual_plant_shutdown(years_running, df, time_array, typical_shutdown_years, unique_id, min_year):
+    ''' Shutdown a unit early. The df must have a variable 'Year_of_Commission' describing when the plant was comissioned, and 'BC_(g/day)' for BC emissions in g/day
+        years_running is the number of years the plant runs
+        time_array is the length of time for our simulation
+        shutdown_years is the typical lifetime of a coal plant
+        unique_id is the unique identifier of a unit'''
+    shutdown_days = typical_shutdown_years*365
+    E = np.zeros(len(time_array))
+    ID_df = df.loc[df['unique_ID'] == unique_id]
+    yr_offset = (ID_df['Year_of_Commission'].iloc[0] - min_year)
+    test_array = np.where((time_array <= (yr_offset + years_running)*365) & (time_array >= yr_offset * 365), True, False)
+    E += test_array* ID_df['BC_(g/day)'].sum()
+    return(E)
+
+## function for creating a time specific xarray data array
+
+def np_to_xr_time_specific(C, G, E, time_init):
+    '''Function to create an xarray data-array over a specified time period, with lat, lon, and s dimensions (s = time)'''
+    C = xr.DataArray(
+    data = C,
+    dims = ['s','lat','lon'],
+    coords = dict(
+        s = (['s'], np.arange(time_init, C.shape[0] + time_init)), 
+        lat = (['lat'], G.lat.values),
+        lon = (['lon'], G.lon.values)
+            )
+        )
+    return(C)
+

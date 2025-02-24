@@ -5,33 +5,26 @@
 #SBATCH --partition=edr
 
 
-import xarray as xr
-import matplotlib.pyplot as plt
-import numpy as np
+
 import regionmask
 import pandas as pd
-from geopy.geocoders import Nominatim
-from matplotlib.colors import SymLogNorm
-from matplotlib.pyplot import cm
 import psutil 
-
 import argparse
-
 import xesmf as xe
-import cartopy.crs as ccrs
-import cartopy.feature as cfeat
-import dask
-import utils
 import gc
 import geopandas
 import dask.array as da
-
-from numba import jit
-import numpy as np
-from numba import guvectorize, float64, int64, void
-
 import scipy.signal as signal
 import sparse
+import xarray as xr
+import numpy as np
+import argparse
+import dask
+dask.config.set(**{'array.slicing.split_large_chunks': True})
+import sys
+sys.path.insert(0, '/net/fs11/d0/emfreese/BC-IRF/')
+import utils
+
 
 ####### There are three options for the type of run: weighted_co2, annual_co2, and age_retire.
 ####### weighted_co2 = shutdowns occur based on the percentile of capacity weighted co2 emissions (dirtier plants = bigger emissions)
@@ -48,7 +41,7 @@ args = parser.parse_args()
 print('Country of emissions', args.country_emit)
 
 
-years = 50
+years = utils.years
 
 country_emit = args.country_emit
 
@@ -61,7 +54,7 @@ season_days = {'DJF': 90, 'MAM':92, 'JJA':92, 'SON':91}
 
 
 ## import the china global powerplant database from Springer et al.
-CGP_df = pd.read_csv('../../data_output/plants/BC_SE_Asia_all_financing_SEA_GAINS_Springer.csv')
+CGP_df = pd.read_csv(f'{utils.data_output_path}plants/BC_SE_Asia_all_financing_SEA_GAINS_Springer.csv')
 
 CGP_df.columns = CGP_df.columns.str.replace(' ', '_')
 
@@ -70,37 +63,23 @@ min_year = CGP_df['Year_of_Commission'].min()
 ## reduce to one country for emissions
 
 CGP_df = CGP_df.loc[CGP_df['COUNTRY'] == country_emit]
+
+##remove any plants that have no data on commission year
+CGP_df = CGP_df.loc[CGP_df['Year_of_Commission'].dropna().index]
 print('Emis data prepped and loaded')
 
 
 ######## Country mask and dataframe ######
 
 country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_50
-country_df = geopandas.read_file('../../raw_data_inputs/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
+country_df = geopandas.read_file(f'{utils.raw_data_in_path}/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
 countries = ['China','Australia', 'India','Myanmar', 'Cambodia', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan','Brunei','Singapore', 'Papua New Guinea', 'Solomon Islands', 'East Timor', 'Taiwan']
 country_df = country_df.rename(columns = {'SOVEREIGNT':'country'})
 
 ds_area = xr.open_dataset('/net/fs11/d0/emfreese/GCrundirs/IRF_runs/stretch_2x_pulse/SEA/Jan/mod_output/GEOSChem.SpeciesConc.20160101_0000z.nc4', engine = 'netcdf4')
 utils.fix_area_ij_latlon(ds_area);
 
-regrid_area_ds = xr.open_dataset('../../data_output/convolution/regridded_population_data.nc')
-
-
-####### Functions #########
-
-def individual_plant_shutdown(years_running, df, time_array, typical_shutdown_years, unique_id):
-    ''' Shutdown a unit early. The df must have a variable 'Year_of_Commission' describing when the plant was comissioned, and 'BC_(g/day)' for BC emissions in g/day
-        years_running is the number of years the plant runs
-        time_array is the length of time for our simulation
-        shutdown_years is the typical lifetime of a coal plant
-        unique_id is the unique identifier of a unit'''
-    shutdown_days = typical_shutdown_years*365
-    E = np.zeros(len(time_array))
-    ID_df = df.loc[df['unique_ID'] == unique_id]
-    yr_offset = (ID_df['Year_of_Commission'].iloc[0] - min_year)
-    test_array = np.where((time_array <= (yr_offset + years_running)*365) & (time_array >= yr_offset * 365), True, False)
-    E += test_array* ID_df['BC_(g/day)'].sum()
-    return(E)
+regrid_area_ds = xr.open_dataset(f'{utils.data_output_path}/convolution/regridded_population_data.nc')
 
 
 
@@ -109,8 +88,9 @@ def individual_plant_shutdown(years_running, df, time_array, typical_shutdown_ye
 
 E_CO2_all_opts = {}
 year = 1
+typical_shutdown_years = 40
 for unique_id in CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID'].values:
-    E_CO2_all_opts[unique_id] = individual_plant_shutdown(year, CGP_df, time_array, 40, unique_id)
+    E_CO2_all_opts[unique_id] = utils.individual_plant_shutdown(year, CGP_df, time_array, typical_shutdown_years, unique_id, min_year)
 print('Emissions profiles based on weighted capacity of CO2 emissions percentiles created')
 
 
@@ -121,7 +101,7 @@ country_emit_dict = {'INDONESIA':['Indo_Jan', 'Indo_Apr', 'Indo_July','Indo_Oct'
                'MALAYSIA': ['Malay_Jan','Malay_Apr','Malay_July','Malay_Oct'], 'VIETNAM': ['Viet_Jan','Viet_Apr','Viet_July','Viet_Oct']}
 
 #import the green's function and set our time step
-G = xr.open_dataarray('../../data_output/greens_functions/GF_combined.nc', chunks = 'auto')
+G = xr.open_dataarray(f'{utils.GF_name_path}/G_combined.nc', chunks = 'auto')
 
 #column sum Green's function, only select our country of emissions
 G_column_sum = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).sum(dim = 'lev').compute()
@@ -133,20 +113,23 @@ G_lev0 = G_lev0.where((G_lev0 > 0), drop = True).rename({'time':'s'})
 
 print('G prepped')
 
-## function for creating a time specific xarray data array
 
-def np_to_xr_time_specific(C, G, E, time_init):
-    '''Function to create an xarray data-array over a specified time period, with lat, lon, and s dimensions (s = time)'''
-    C = xr.DataArray(
-    data = C,
-    dims = ['s','lat','lon'],
-    coords = dict(
-        s = (['s'], np.arange(time_init, C.shape[0] + time_init)), 
-        lat = (['lat'], G.lat.values),
-        lon = (['lon'], G.lon.values)
-            )
-        )
-    return(C)
+##check that the sizing of arrays is okay
+# breakpoint()
+# for unique_id in CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID']: #loop over each individual plant we're looking at
+#     print(unique_id)
+#     print(E_CO2_all_opts[unique_id])
+#     if E_CO2_all_opts[unique_id].sum()>0:            
+#         for G_ds in [G_lev0, G_column_sum]: 
+#             for idx, season in enumerate(season_days.keys()):
+#                 G_shape = G_ds.sel(run = country_emit_dict[country_emit][idx]).fillna(0).shape()
+#                 E_shape = E_CO2_all_opts[unique_id][n:n+season_days[season]][..., None, None].shape()
+#                 if G_shape == E_shape:
+#                     print('Equal')
+#                 elif G_shape != E_shape:
+#                     print('Unequal')
+#                     print('G shape:', G_shape)
+#                     print('E shape:', E_shape)
 
 
 
@@ -199,7 +182,7 @@ for unique_id in CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID']: #loop over ea
 
             C_dense = sparse.COO.todense(C_sum)
             
-            C_out = np_to_xr_time_specific(C_dense, G_ds, E_CO2_all_opts[unique_id], time_init = np.unique([i for i, x in enumerate(E_CO2_all_opts[unique_id]>0) if x])[0])
+            C_out = utils.np_to_xr_time_specific(C_dense, G_ds, E_CO2_all_opts[unique_id], time_init = np.unique([i for i, x in enumerate(E_CO2_all_opts[unique_id]>0) if x])[0])
        
             ### country level impacts ###
             mask = country_mask.mask(C_out, lon_name = 'lon', lat_name = 'lat')

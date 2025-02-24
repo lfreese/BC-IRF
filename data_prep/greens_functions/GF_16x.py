@@ -8,7 +8,6 @@
 
 import xarray as xr
 import numpy as np
-import numpy as np
 import argparse
 import dask
 dask.config.set(**{'array.slicing.split_large_chunks': True})
@@ -76,7 +75,7 @@ print('time shifted')
 
 ### Add height to data
 
-height = pd.read_excel('gc_72_estimate.xlsx', index_col = 0)
+height = pd.read_excel(f'{utils.raw_data_in_path}gc_72_estimate.xlsx', index_col = 0)
 height = height.reindex(index=height.index[::-1])
 height_ds = height.diff().dropna().to_xarray().rename({'L':'lev'})
 height_ds = height_ds.rename({'Altitude (km)':'dz'}) 

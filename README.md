@@ -1,5 +1,17 @@
 # BC-IRF
 
+## Folder system:
+### Plotting
+### Raw_data_inputs
+### data_output
+### data_prep
+### figures
+
+
+
+
+
+
 ### Create a pulse run
 
 Prep_pulses notebook: importing the file of interest to pulse, selecting the region of interest for the pulse. Add a reasonable amount relative to the existing emissions amounts (we use +1x and +15x). When running GEOS-Chem modify the normal file to read in the new one instead via HEMCO_Config.
