@@ -13,7 +13,7 @@ names_dict = {'SEA':'Southeast Asia', 'Indo':'Indonesia', 'Malay':'Malaysia', 'V
 
 
 ################## Data paths #############
-GF_name_path = '../../data_output/greens_functions/'
+GF_name_path = '/net/fs11/d0/emfreese/BC-IRF/data_output/greens_functions/'
 data_output_path = '/net/fs11/d0/emfreese/BC-IRF/data_output/'
 raw_data_in_path = '/net/fs11/d0/emfreese/BC-IRF/raw_data_inputs/'
 data_prep_path = '/net/fs11/d0/emfreese/BC-IRF/data_prep/'

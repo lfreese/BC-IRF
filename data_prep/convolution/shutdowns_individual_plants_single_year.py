@@ -12,7 +12,7 @@ import psutil
 import argparse
 import xesmf as xe
 import gc
-import geopandas
+import g
 import dask.array as da
 import scipy.signal as signal
 import sparse
@@ -112,26 +112,6 @@ G_lev0 = G.where(G.run.isin(country_emit_dict[country_emit]), drop = True).isel(
 G_lev0 = G_lev0.where((G_lev0 > 0), drop = True).rename({'time':'s'})
 
 print('G prepped')
-
-
-##check that the sizing of arrays is okay
-# breakpoint()
-# for unique_id in CGP_df.loc[CGP_df['BC_(g/day)'] >0]['unique_ID']: #loop over each individual plant we're looking at
-#     print(unique_id)
-#     print(E_CO2_all_opts[unique_id])
-#     if E_CO2_all_opts[unique_id].sum()>0:            
-#         for G_ds in [G_lev0, G_column_sum]: 
-#             for idx, season in enumerate(season_days.keys()):
-#                 G_shape = G_ds.sel(run = country_emit_dict[country_emit][idx]).fillna(0).shape()
-#                 E_shape = E_CO2_all_opts[unique_id][n:n+season_days[season]][..., None, None].shape()
-#                 if G_shape == E_shape:
-#                     print('Equal')
-#                 elif G_shape != E_shape:
-#                     print('Unequal')
-#                     print('G shape:', G_shape)
-#                     print('E shape:', E_shape)
-
-
 
 
 ## convolution
