@@ -1,0 +1,45 @@
+name: bc-irf
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # Core Python
+  - python=3.9
+  
+  # Data analysis
+  - numpy
+  - pandas
+  - scipy
+  - xarray
+  - netcdf4
+  
+  # Geospatial
+  - geopandas
+  - regionmask
+  - cartopy
+  - shapely
+  - rioxarray
+  
+  # Visualization
+  - matplotlib
+  - seaborn
+  
+  # Climate data
+  - cftime
+  - cf_xarray
+  - cmip6_preprocessing
+  
+  # Jupyter environment
+  - jupyter
+  - ipykernel
+  
+  # Utilities
+  - tqdm
+  - pyyaml
+  
+  # Additional packages from pip
+  - pip
+  - pip:
+    - climpred
+    - xskillscore
+    - xesmf

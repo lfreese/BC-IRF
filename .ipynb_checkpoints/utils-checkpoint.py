@@ -13,7 +13,7 @@ names_dict = {'SEA':'Southeast Asia', 'Indo':'Indonesia', 'Malay':'Malaysia', 'V
 
 
 ################## Data paths #############
-GF_name_path = '../../data_output/greens_functions/'
+GF_name_path = '/net/fs11/d0/emfreese/BC-IRF/data_output/greens_functions/'
 data_output_path = '/net/fs11/d0/emfreese/BC-IRF/data_output/'
 raw_data_in_path = '/net/fs11/d0/emfreese/BC-IRF/raw_data_inputs/'
 data_prep_path = '/net/fs11/d0/emfreese/BC-IRF/data_prep/'
@@ -226,7 +226,7 @@ def exponential_decay(a, b, N):
 
 ####### Functions #########
 
-def individual_plant_shutdown(years_running, df, time_array, typical_shutdown_years, unique_id, min_year):
+def individual_plant_shutdown(years_running, df, time_array, typical_shutdown_years, unique_id, min_year, var = 'BC_(g/day)'):
     ''' Shutdown a unit early. The df must have a variable 'Year_of_Commission' describing when the plant was comissioned, and 'BC_(g/day)' for BC emissions in g/day
         years_running is the number of years the plant runs
         time_array is the length of time for our simulation
@@ -237,7 +237,7 @@ def individual_plant_shutdown(years_running, df, time_array, typical_shutdown_ye
     ID_df = df.loc[df['unique_ID'] == unique_id]
     yr_offset = (ID_df['Year_of_Commission'].iloc[0] - min_year)
     test_array = np.where((time_array <= (yr_offset + years_running)*365) & (time_array >= yr_offset * 365), True, False)
-    E += test_array* ID_df['BC_(g/day)'].sum()
+    E += test_array* ID_df[var].sum()
     return(E)
 
 ## function for creating a time specific xarray data array

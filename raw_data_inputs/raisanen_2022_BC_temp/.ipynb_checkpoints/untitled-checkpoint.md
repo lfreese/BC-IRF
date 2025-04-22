@@ -1,0 +1,2 @@
+
+Räisänen, P. (2022). Data and code for the manuscript ‘Mapping the dependence of BC radiative forcing on emission region and season’ by Petri Räisänen et al. (submitted to ACP) [Dataset]. Finnish Meteorological Institute. https://doi.org/10.23728/FMI-B2SHARE.37E9742A67B8415E8F8102A8D9757F6B

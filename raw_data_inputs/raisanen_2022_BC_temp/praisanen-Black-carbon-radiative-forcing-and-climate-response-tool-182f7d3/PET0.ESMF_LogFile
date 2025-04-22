@@ -1,0 +1,9 @@
+20250318 134858.195 ERROR            PET0 ESMF_FieldRegrid.F90:900 ESMF_FieldRegridStoreNX Invalid argument  -  extrapolation currently not supported with conservative regrid methods (the resulting weights wouldn't be conservative with the available extrapolation methods).
+20250318 134858.196 ERROR            PET0 ESMF_Field_C.F90:1137 f_esmf_regridstore Invalid argument  - Internal subroutine call returned Error
+20250318 134858.196 ERROR            PET0 ESMCI_Field.C:1468 ESMCI::Field::regridstore() Invalid argument  - Internal subroutine call returned Error
+20250318 134858.196 ERROR            PET0 ESMC_Field.C:459 ESMC_FieldRegridStore() Invalid argument  - Internal subroutine call returned Error
+20250318 134925.389 ERROR            PET0 ESMF_FieldRegrid.F90:900 ESMF_FieldRegridStoreNX Invalid argument  -  extrapolation currently not supported with conservative regrid methods (the resulting weights wouldn't be conservative with the available extrapolation methods).
+20250318 134925.390 ERROR            PET0 ESMF_Field_C.F90:1137 f_esmf_regridstore Invalid argument  - Internal subroutine call returned Error
+20250318 134925.390 ERROR            PET0 ESMCI_Field.C:1468 ESMCI::Field::regridstore() Invalid argument  - Internal subroutine call returned Error
+20250318 134925.390 ERROR            PET0 ESMC_Field.C:459 ESMC_FieldRegridStore() Invalid argument  - Internal subroutine call returned Error
+20250318 135742.271 INFO             PET0 Finalizing ESMF

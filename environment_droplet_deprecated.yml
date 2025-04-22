@@ -1,4 +1,4 @@
-name: gchp
+name: bc-calcs
 channels:
   - conda-forge
   - defaults
@@ -245,7 +245,7 @@ dependencies:
   - pyzmq=23.0.0=py39headdf64_0
   - rasterio=1.2.10=py39h0401cea_4
   - readline=8.1=h46c0cb4_0
-  - regionmask=0.9.0=pyhd8ed1ab_0
+  - regionmask=0.13.0=pyhd8ed1ab_0
   - requests=2.27.1=pyhd8ed1ab_0
   - rtree=1.0.0=py39hb102c33_1
   - scikit-learn=1.1.1=py39h4037b75_0
@@ -299,7 +299,7 @@ dependencies:
   - xarrayutils=1.1.1=pyhd8ed1ab_0
   - xbpch=0.3.5=py_0
   - xerces-c=3.2.3=h8ce2273_4
-  - xesmf=0.6.0=pyhd8ed1ab_0
+  - xesmf
   - xmip=0.6.1rc0=pyhd8ed1ab_0
   - xorg-kbproto=1.0.7=h7f98852_1002
   - xorg-libice=1.0.10=h7f98852_0
@@ -320,9 +320,6 @@ dependencies:
   - zipp=3.8.0=pyhd8ed1ab_0
   - zlib=1.2.12=h166bdaf_0
   - zstd=1.5.2=h8a70e8d_1
-  - pip:
-    - geographiclib==1.52
-    - geopy==2.2.0
-    - sparselt==0.1.0
-prefix: /home/emfreese/anaconda3/envs/gchp
+  
+prefix: /home/emfreese/anaconda3/envs/bc-calc
 
