@@ -1,8 +1,12 @@
 import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib as mpl
+
+import cmocean.cm as cmo
 import xarray as xr
 import numpy as np
 import pandas as pd
-def prepare_concentration_data(full_ds, map_locations, shutdown_years, 
+def prepare_concentration_data(full_ds, gdf, map_locations, shutdown_years, 
                              variable='BC_pop_weight_mean_conc',
                              normalize=False,
                              emissions_df=None):
@@ -40,11 +44,12 @@ def prepare_concentration_data(full_ds, map_locations, shutdown_years,
         for yr in shutdown_years:
             # Get concentration data
             if loc == 'all':
-                data = full_ds[variable].sel(closure_year=yr).sum(dim='unique_ID')
+                data = full_ds[variable].sel(closure_year=yr).sel(scenario = 'main').sum(dim='unique_ID')
             else:
                 data = (full_ds
                        .where(full_ds.country_emitting == loc, drop=True)
                        .sel(closure_year=yr)[variable]
+                       .sel(scenario = 'main')
                        .sum(dim='unique_ID'))
             
             # Create GeoDataFrame
@@ -57,9 +62,9 @@ def prepare_concentration_data(full_ds, map_locations, shutdown_years,
             # Normalize if requested
             if normalize:
                 if loc == 'all':
-                    total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'].sum() * yr
+                    total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'].sum() 
                 else:
-                    total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'][loc] * yr
+                    total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'][loc]
                 
                 gdf_data[variable] = gdf_data[variable] / total_emissions
             
@@ -69,6 +74,8 @@ def prepare_concentration_data(full_ds, map_locations, shutdown_years,
 
 
 def plot_concentration_maps(conc_by_location, map_locations, shutdown_years,
+                            impacted_countries,
+                            country_df,
                           variable='BC_pop_weight_mean_conc',
                           vmin=1e-6, vmax=1e-1,
                           figsize=(25,15),
@@ -173,8 +180,404 @@ def plot_concentration_maps(conc_by_location, map_locations, shutdown_years,
     
     return fig, axes
 
+def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location, 
+                                       map_locations, year,
+                                       impacted_countries, country_df,
+                                       variable='BC_pop_weight_mean_conc',
+                                       vmin_regular=1e-6, vmax_regular=1e-1,
+                                       vmin_norm=None, vmax_norm=None,
+                                       figsize=(20, 12),
+                                       save_path=None):
+    """
+    Create maps of BC concentrations for a single year showing both regular and normalized data.
+    
+    Parameters:
+    -----------
+    conc_by_location : dict
+        Nested dictionary of prepared regular data from prepare_concentration_data()
+    norm_conc_by_location : dict
+        Nested dictionary of prepared normalized data from prepare_concentration_data()
+    map_locations : list
+        List of locations to plot
+    year : int
+        Year to plot
+    impacted_countries : list
+        List of countries to highlight as impacted
+    country_df : GeoDataFrame
+        GeoDataFrame containing country boundaries
+    variable : str, optional
+        Variable being plotted (for labels)
+    vmin_regular, vmax_regular : float, optional
+        Min and max values for color normalization of regular data
+    vmin_norm, vmax_norm : float, optional
+        Min and max values for color normalization of normalized data
+        If None, will be automatically determined from the data
+    figsize : tuple, optional
+        Figure size (width, height)
+    save_path : str, optional
+        If provided, save figure to this path
+    
+    Returns:
+    --------
+    fig : matplotlib.figure.Figure
+    axes : numpy.ndarray
+        Array of matplotlib axes
+    """
+    # Set up the figure
+    n_locations = len(map_locations)
+    fig, axes = plt.subplots(2, n_locations, 
+                           figsize=figsize, 
+                           sharex=True, sharey=True, 
+                           constrained_layout=True)
+    
+    # Define impacted countries
+    all_countries = list(set(impacted_countries + ['Malaysia', 'Cambodia', 'Indonesia', 'Vietnam']))
+    
+    # If vmin_norm or vmax_norm not provided, calculate from data
+    if vmin_norm is None or vmax_norm is None:
+        # Find min and max values across all locations
+        all_values = []
+        for location in map_locations:
+            values = norm_conc_by_location[location][year][variable].values
+            all_values.extend(values[~np.isnan(values)])
+        
+        if vmin_norm is None:
+            vmin_norm = np.percentile(all_values, 5)  # 5th percentile to avoid outliers
+        if vmax_norm is None:
+            vmax_norm = np.percentile(all_values, 95)  # 95th percentile to avoid outliers
+    
+    # Create regular data plots (top row)
+    for col_idx, location in enumerate(map_locations):
+        ax = axes[0, col_idx]
+        
+        # Plot concentrations
+        cmap = cmo.matter
+        conc_by_location[location][year].plot(
+            ax=ax,
+            column=variable,
+            cmap=cmap,
+            norm=matplotlib.colors.LogNorm(vmin=vmin_regular, vmax=vmax_regular)
+        )
+        
+        # Plot country boundaries
+        country_df[country_df['country'].isin(all_countries)].boundary.plot(
+            ax=ax, 
+            color='k', 
+            linewidth=0.5
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
 
-def analyze_emissions_by_var(full_ds, var):
+        # Add hatching for emitting countries
+        if location in ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']:
+            country_df[country_df['country'] == location.capitalize()].boundary.plot(
+                ax=ax, 
+                color='k', 
+                linewidth=0.5, 
+                hatch="\\\\////"
+            )
+        elif location == 'all':
+            country_df[country_df['country'].isin(['Vietnam','Indonesia','Cambodia','Malaysia'])].boundary.plot(
+                ax=ax, 
+                color='k', 
+                linewidth=0.5, 
+                hatch="\\\\////"
+            )
+        
+        # Set titles and labels
+        ax.set_title(f'{location.capitalize()}', 
+                   fontsize=16)
+        
+        # Set map extent
+        ax.set_xlim(75, 155)
+        ax.set_ylim(-35, 45)
+    
+    # Create normalized data plots (bottom row)
+    for col_idx, location in enumerate(map_locations):
+        ax = axes[1, col_idx]
+        
+        # Plot normalized concentrations
+        norm_conc_by_location[location][year].plot(
+            ax=ax,
+            column=variable,
+            cmap=cmap,
+            norm=matplotlib.colors.LogNorm(vmin=vmin_norm, vmax=vmax_norm)
+        )
+        
+        # Plot country boundaries
+        country_df[country_df['country'].isin(all_countries)].boundary.plot(
+            ax=ax, 
+            color='k', 
+            linewidth=0.5
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        # Add hatching for emitting countries
+        if location in ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']:
+            country_df[country_df['country'] == location.capitalize()].boundary.plot(
+                ax=ax, 
+                color='k', 
+                linewidth=0.5, 
+                hatch="\\\\////"
+            )
+        elif location == 'all':
+            country_df[country_df['country'].isin(['Vietnam','Indonesia','Cambodia','Malaysia'])].boundary.plot(
+                ax=ax, 
+                color='k', 
+                linewidth=0.5, 
+                hatch="\\\\////"
+            )
+        
+        # Set titles and labels
+        ax.set_title(f'{location.capitalize()}', 
+                   fontsize=16)
+        
+        # Set map extent
+        ax.set_xlim(75, 155)
+        ax.set_ylim(-35, 45)
+    
+    # Add row labels
+    fig.text(-0.03, 0.75, f'Cumulative Concentration \n(ng/m³)', 
+            fontsize=16, va='center', ha='center', rotation=90)
+    fig.text(-0.03, 0.25, f'Cumulative Concentration normalized \nby Total Emissions (ng/m³/kg/day)', 
+            fontsize=16, va='center', ha='center', rotation=90)
+    
+    # Add colorbars
+    # Regular data colorbar
+    cb_ax1 = fig.add_axes([0.25, 0.50, 0.5, 0.02])
+    cb1 = mpl.colorbar.ColorbarBase(
+        ax=cb_ax1, 
+        cmap=cmap, 
+        norm=matplotlib.colors.LogNorm(vmin=vmin_regular, vmax=vmax_regular),
+        orientation='horizontal', 
+    )
+    cb1.ax.tick_params(labelsize=14)  
+    cb1.set_label('Concentration (ng/m³)', fontsize=16) 
+
+    # Normalized data colorbar
+    cb_ax2 = fig.add_axes([0.25, 0.01, 0.5, 0.02])
+    cb2 = mpl.colorbar.ColorbarBase(
+        ax=cb_ax2, 
+        cmap=cmap, 
+        norm=matplotlib.colors.LogNorm(vmin=vmin_norm, vmax=vmax_norm),
+        orientation='horizontal', 
+    )
+    cb2.ax.tick_params(labelsize=14)  
+    cb2.set_label('Normalized concentration (ng/m³/kg/day)', fontsize=16) 
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+    
+    return fig, axes
+def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, location='all', 
+                               variable='BC_pop_weight_mean_conc', top_n=10):
+    """
+    Create side-by-side Sankey diagrams from the concentration data prepared for mapping,
+    showing both regular and normalized data.
+    
+    Parameters:
+    -----------
+    regular_data : dict
+        Output from prepare_concentration_data function for regular data
+    norm_data : dict, optional
+        Output from prepare_concentration_data function for normalized data
+        If None, only the regular data diagram will be shown
+    year : int
+        Year to visualize
+    location : str
+        Either 'all' or one of the source countries
+    variable : str
+        Variable to visualize (e.g., 'BC_pop_weight_mean_conc')
+    top_n : int
+        Number of top receptor countries to include
+    
+    Returns:
+    --------
+    plotly.graph_objects.Figure
+        Figure containing one or two Sankey diagrams
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    import numpy as np
+    
+    # Define a colormap for source countries
+    source_colors = {
+        'MALAYSIA': '#AAA662',  # SaddleBrown
+        'CAMBODIA': '#029386',  # OrangeRed
+        'INDONESIA': '#FF6347', # DeepPink
+        'VIETNAM': '#DAA520'    # Gold
+    }
+    
+    # Check if the location is valid
+    if location not in regular_data:
+        raise ValueError(f"Location '{location}' not found in data. Available: {list(regular_data.keys())}")
+    
+    # Determine if we're making one or two diagrams
+    has_norm_data = norm_data is not None and location in norm_data
+    
+    # Create subplots - either 1x1 or 1x2 depending on whether norm_data is provided
+    if has_norm_data:
+        fig = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=("Regular Concentration", "Normalized Concentration"),
+            specs=[[{"type": "sankey"}, {"type": "sankey"}]],
+            horizontal_spacing=0.05
+        )
+        fig_width = 1200  # Wider for two diagrams
+    else:
+        fig = make_subplots(
+            rows=1, cols=1,
+            subplot_titles=("Concentration"),
+            specs=[[{"type": "sankey"}]],
+        )
+        fig_width = 600  # Narrower for one diagram
+    
+    # Process data and create Sankey diagrams for both datasets
+    for data_idx, data_dict in enumerate([regular_data, norm_data]):
+        # Skip if this is the normalized data and it's not provided
+        if data_idx == 1 and not has_norm_data:
+            continue
+        
+        try:
+            # Get data for the specified year and location
+            data_df = data_dict[location][year].copy()
+            
+            # Group by country_impacted and sum the values
+            if isinstance(data_df, pd.DataFrame):
+                grouped_df = data_df.groupby(data_df.index)[variable].sum().reset_index()
+                grouped_df.columns = ['country_impacted', variable]
+            else:
+                # If it's already in the right format, just ensure we have the right columns
+                grouped_df = data_df.reset_index()
+                grouped_df = grouped_df.groupby('country_impacted')[variable].sum().reset_index()
+            
+        except KeyError:
+            raise ValueError(f"Year {year} not found in data. Available: {list(data_dict[location].keys())}")
+        
+        # Remove NaN values
+        grouped_df = grouped_df.dropna(subset=[variable])
+        
+        if grouped_df.empty:
+            return f"No data for {location} in {year} for variable {variable}"
+        
+        # Sort by impact and get top receptors
+        top_receptors = grouped_df.sort_values(variable, ascending=False).head(top_n)
+        
+        # For 'all', we need to split by source country
+        if location == 'all':
+            # Get source countries from the map_locations list
+            source_countries = ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']
+            
+            # Create separate DataFrames for each source country
+            country_dfs = {}
+            for country in source_countries:
+                if country in data_dict:
+                    country_data = data_dict[country][year].copy()
+                    
+                    # Group by country_impacted and sum
+                    if isinstance(country_data, pd.DataFrame):
+                        country_grouped = country_data.groupby(country_data.index)[variable].sum().reset_index()
+                        country_grouped.columns = ['country_impacted', variable]
+                    else:
+                        country_grouped = country_data.reset_index()
+                        country_grouped = country_grouped.groupby('country_impacted')[variable].sum().reset_index()
+                    
+                    # Filter to only include top receptor countries
+                    country_grouped = country_grouped[country_grouped['country_impacted'].isin(top_receptors['country_impacted'])]
+                    
+                    if not country_grouped.empty:
+                        country_dfs[country] = country_grouped
+            
+            # Prepare data for the Sankey diagram
+            all_sources = []
+            all_targets = []
+            all_values = []
+            all_labels = []
+            all_colors = []
+            
+            # Create nodes list and mapping
+            source_nodes = [country.title() for country in country_dfs.keys()]
+            target_nodes = top_receptors['country_impacted'].tolist()
+            all_nodes = source_nodes + target_nodes
+            node_indices = {}
+            for i, node in enumerate(all_nodes):
+                if node.upper() in source_countries:
+                    node_indices[node.upper()] = i
+                else:
+                    node_indices[node] = i
+            
+            # Create links
+            for source_country, df in country_dfs.items():
+                source_idx = node_indices[source_country]
+                for _, row in df.iterrows():
+                    receptor = row['country_impacted']
+                    value = row[variable]
+                    if np.isnan(value) or value <= 0:
+                        continue
+                        
+                    target_idx = node_indices[receptor]
+                    all_sources.append(source_idx)
+                    all_targets.append(target_idx)
+                    all_values.append(value)
+                    source_title = source_country.title()
+                    
+                    # Format the label differently based on regular vs normalized data
+                    if data_idx == 0:  # Regular data
+                        all_labels.append(f"{source_title} → {receptor}: {value:.2e}")
+                    else:  # Normalized data
+                        all_labels.append(f"{source_title} → {receptor}: {value:.2e}")
+                    
+                    # Add color based on source country (transparent version)
+                    source_color = source_colors[source_country]
+                    # Convert to rgba with transparency
+                    rgba_color = f"rgba{tuple(int(source_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (0.5,)}"
+                    all_colors.append(rgba_color)
+            
+            # Create node colors - source nodes get their country color, target nodes are gray
+            node_colors = []
+            for node in all_nodes:
+                if node.upper() in source_colors:
+                    node_colors.append(source_colors[node.upper()])
+                else:
+                    node_colors.append("black")
+                    
+            # Create Sankey diagram
+            sankey = go.Sankey(
+                node = dict(
+                    pad = 5,
+                    thickness = 20,
+                    line = dict(color = "black", width = 0.5),
+                    label = all_nodes,
+                    color = node_colors
+                ),
+                link = dict(
+                    source = all_sources,
+                    target = all_targets,
+                    value = all_values,
+                    label = all_labels,
+                    color = all_colors
+                )
+            )
+            
+            # Add the sankey diagram to the appropriate subplot
+            fig.add_trace(
+                sankey,
+                row=1, 
+                col=data_idx + 1  # 1 for regular data, 2 for normalized data
+            )
+
+    # Update layout
+    fig.update_layout(
+        font_size=12,
+        height=400,
+        width=fig_width,
+        margin=dict(l=15, r=15, b=15, t=50)
+    )
+    
+    return fig
+
+def analyze_emissions_by_var(full_ds, var, country= None):
     """
     Analyze emissions by progressively including plants sorted by commissioning year.
     
@@ -192,6 +595,9 @@ def analyze_emissions_by_var(full_ds, var):
     """
     # Sort the dataset in descending order
     sorted_ds = full_ds.sortby(var, ascending=False)
+    if country:
+        # Filter by country if specified
+        sorted_ds = sorted_ds.where(sorted_ds['country_emitting'] == country, drop=True)
     
     # Get the number of plants
     n_plants = len(sorted_ds['unique_ID'])
@@ -200,25 +606,11 @@ def analyze_emissions_by_var(full_ds, var):
     age_ds = {}
     bckg_age_ds = {}
     
-    # List of ARTP index variables that should use mean aggregation
-    rf_vars = []
-    #     'Global_10', 'Global_20', 'Global_50', 'Global_100',
-    #     'N_arctic_10', 'N_arctic_20', 'N_arctic_50', 'N_arctic_100',
-    #     'N_midlat_10', 'N_midlat_20', 'N_midlat_50', 'N_midlat_100',
-    #     'S_subtropics_10', 'S_subtropics_20', 'S_subtropics_50', 'S_subtropics_100',
-    #     'Tropics_10', 'Tropics_20', 'Tropics_50', 'Tropics_100', 'drf', 'snowrf', 'dt_drf', 'dt_snowrf'
-    # ]
-    
     # Create datasets for each threshold
     for idx in range(1, n_plants + 1):  # Start from 1 to n_plants
         # Oldest plants up to idx
-        # For ARTP index variables, use mean instead of sum
-        if var in rf_vars:
-            age_ds[idx] = sorted_ds.isel(unique_ID=slice(0, idx)).mean(dim='unique_ID')
-            bckg_age_ds[idx] = sorted_ds.isel(unique_ID=slice(idx, n_plants)).mean(dim='unique_ID')
-        else:
-            age_ds[idx] = sorted_ds.isel(unique_ID=slice(0, idx)).sum(dim='unique_ID')
-            bckg_age_ds[idx] = sorted_ds.isel(unique_ID=slice(idx, n_plants)).sum(dim='unique_ID')
+        age_ds[idx] = sorted_ds.isel(unique_ID=slice(0, idx)).sum(dim='unique_ID')
+        bckg_age_ds[idx] = sorted_ds.isel(unique_ID=slice(idx, n_plants)).sum(dim='unique_ID')
 
     # Concatenate along a new dimension representing the threshold
     age_ds = xr.concat([age_ds[i] for i in range(1, n_plants + 1)], 
@@ -229,9 +621,11 @@ def analyze_emissions_by_var(full_ds, var):
     
     return age_ds, bckg_age_ds
 
-def plot_variable_by_country(dataset, variable, country=None, emitting_country=None, scenario='main', 
+def plot_variable_by_country(dataset, variable, country=None, scenario=None, 
                            contour_variable=None, levels=10,
-                           figsize=(10, 6), ax=None, target_year=2040, target_co2=10):
+                           figsize=(10, 6), ax=None, target_year=2040, target_co2=0.001,
+                           xlim=None, ylim=None, vmin=None, vmax=None, 
+                           cmap='cividis', colorbar_label=None, flip_y_axis = True):
     """
     Plot a variable for a specific country and scenario, with optional contour overlay.
     
@@ -243,10 +637,9 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
         The variable to plot (e.g., 'BC_surface_mean_conc', 'co2_emissions')
     country : str or None
         Country receiving impacts to select (None for variables without country dimension)
-    emitting_country : str or None
-        Country emitting pollutants to filter by (None for all emitting countries)
-    scenario : str
-        Scenario to plot (default: 'main')
+    scenario : str or None
+        Scenario to plot. If None, no scenario selection is applied.
+        If provided but 'scenario' isn't in data.dims, this parameter is ignored.
     contour_variable : str or None
         Optional second variable to plot as contours
     levels : int
@@ -259,6 +652,16 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
         Year to draw vertical reference line (default: 2040)
     target_co2 : float
         CO2 emissions target in GtCO2 for horizontal reference line (default: 10)
+    xlim : tuple or None
+        Custom x-axis limits as (min, max)
+    ylim : tuple or None
+        Custom y-axis limits as (min, max)
+    vmin, vmax : float or None
+        Custom colorbar limits
+    cmap : str
+        Colormap name
+    colorbar_label : str or None
+        Custom colorbar label. If None, uses default based on variable.
         
     Returns:
     --------
@@ -270,15 +673,6 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
     else:
         fig = ax.figure
     
-    # Filter by emitting country if specified
-    if emitting_country is not None:
-        # Get the unique_IDs for plants in the emitting country
-        plant_ids = dataset.where(dataset.country_emitting == emitting_country, drop=True).unique_ID
-        
-        # If we found plants, filter the dataset to only include those plants
-        if len(plant_ids) > 0:
-            dataset = dataset.sel(unique_ID=plant_ids)
-    
     # Select data based on provided parameters
     data = dataset[variable]
     
@@ -286,16 +680,29 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
     if country is not None and 'country_impacted' in data.dims:
         data = data.sel(country_impacted=country)
     
-    # Apply scenario selection
-    if 'scenario' in data.dims:
+    # Apply scenario selection ONLY if scenario dimension exists
+    if scenario is not None and 'scenario' in data.dims:
         data = data.sel(scenario=scenario)
+        scenario_info = f" ({scenario} scenario)"
+    else:
+        scenario_info = ""
     
-    # Plot the main data
-    im = data.plot(ax=ax, cmap='cividis', add_colorbar=False)
+    # Plot the main data with custom color limits if provided
+    kwargs = {'cmap': cmap, 'add_colorbar': False}
+    if vmin is not None:
+        kwargs['vmin'] = vmin
+    if vmax is not None:
+        kwargs['vmax'] = vmax
+    
+    im = data.plot(ax=ax, **kwargs)
     
     # Add colorbar with custom label
     cbar = plt.colorbar(im, ax=ax)
-    if variable == 'BC_surface_mean_conc':
+    
+    # Set colorbar label based on variable or custom label
+    if colorbar_label:
+        cbar.set_label(colorbar_label)
+    elif variable == 'BC_surface_mean_conc':
         cbar.set_label('BC Surface Concentration (ng m$^{-3}$)')
     elif variable == 'co2_emissions':
         cbar.set_label('CO$_2$ Emissions (Gt yr$^{-1}$)')
@@ -303,6 +710,8 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
         cbar.set_label('BC Population Weighted Surface Concentration (ng m$^{-3}$)')
     elif variable == 'BC_column_mean_conc':
         cbar.set_label('BC Column Concentration (ng m$^{-3}$)')
+    else:
+        cbar.set_label(variable.replace('_', ' ').title())
 
     # Add contour plot if requested
     if contour_variable is not None:
@@ -311,7 +720,9 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
         # Apply same selections to contour data
         if country is not None and 'country_impacted' in contour_data.dims:
             contour_data = contour_data.sel(country_impacted=country)
-        if 'scenario' in contour_data.dims:
+        
+        # Apply scenario selection ONLY if scenario dimension exists
+        if scenario is not None and 'scenario' in contour_data.dims:
             contour_data = contour_data.sel(scenario=scenario)
             
         # Convert CO2 emissions to GtCO2 if that's the contour variable
@@ -323,6 +734,10 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
             if 'closure_year' in contour_data.dims:
                 # Get the data for the target year
                 year_data = contour_data.sel(closure_year=target_year)
+            elif 'year' in contour_data.dims:
+                # Get the data for the target year
+                year_data = contour_data.sel(year=target_year)
+            if 'closure_year' or 'year' in contour_data.dims:
                 if len(year_data) > 0:
                     # Convert to numpy array for easier manipulation
                     year_values = year_data.values
@@ -333,16 +748,16 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
                     plants_for_target = plants_values[idx]
                     
                     # Get current axis limits
-                    xlim = ax.get_xlim()
-                    ylim = ax.get_ylim()
+                    current_xlim = ax.get_xlim()
+                    current_ylim = ax.get_ylim()
                     
                     # Plot vertical line from bottom to target plants
                     ax.plot([target_year, target_year], 
-                           [ylim[0], plants_for_target],
+                           [current_ylim[0], plants_for_target],
                            color='white', linestyle='--', alpha=1, linewidth=2)
                     
                     # Plot horizontal line from left to target year
-                    ax.plot([xlim[0], target_year],
+                    ax.plot([current_xlim[0], target_year],
                            [plants_for_target, plants_for_target],
                            color='white', linestyle='--', alpha=1, linewidth=2)
         else:
@@ -355,7 +770,41 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
     # Set axis labels
     ax.set_ylabel('Number of Plants Open')
     ax.set_xlabel('Year of Closure')
+
+    total_plants = len(dataset['plants_open'])
+    # Apply y-axis flipping if requested
+    if flip_y_axis and 'plants_open' in data.dims:
+        # Create a new coordinate for plants_closed
+        plants_closed = total_plants - data['plants_open']
+        
+        # Reindex the data with the new coordinate
+        data = data.assign_coords(plants_closed=('plants_open', plants_closed.values))
+        
+        # Swap the dimension
+        data = data.swap_dims({'plants_open': 'plants_closed'})
+        
+        # Sort by the new dimension to ensure proper ordering
+        data = data.sortby('plants_closed')
+        
+        # Remove the old coordinate to avoid confusion
+        data = data.drop('plants_open')
+
+    # Set axis labels based on whether we flipped the y-axis
+    if flip_y_axis:
+        ax.set_ylabel('Number of Plants Closed')
+    else:
+        ax.set_ylabel('Number of Plants Open')
     
+    ax.set_xlabel('Year')
+
+        
+    # Set custom axis limits if provided
+    if xlim is not None:
+        ax.set_xlim(xlim)
+    if ylim is not None:
+        ax.set_ylim(ylim)
+    
+
     # Add secondary y-axis for MW capacity
     ax2 = ax.twinx()
     
@@ -385,21 +834,42 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
         mw_labels = [f'{mw:.0f}' for mw in mw_ticks]
         
         # Set the secondary axis ticks and labels
-        ax2.set_yticks(plant_ticks)
-        ax2.set_yticklabels(mw_labels)
-        ax2.set_ylabel('Cumulative Capacity (GW)', color='gray')
-        ax2.tick_params(axis='y', labelcolor='gray')
-        
+        if flip_y_axis:
+            # Reverse the tick positions and labels
+            yticks = ax2.get_yticks()
+            ax2.set_yticks(yticks)
+            
+            # Extract text from each label and convert to float
+            try:
+                # Get the current tick positions and their corresponding values
+                ytick_labels = [float(label.get_text()) if label.get_text() else 0 
+                                for label in ax2.get_yticklabels()]
+                
+                # Create new labels showing capacity lost
+                new_labels = [f'{max_mw - val:.0f}' if val <= max_mw else '0' 
+                            for val in ytick_labels]
+                
+                ax2.set_yticklabels(new_labels)
+            except ValueError:
+                # Fallback if there's an issue with the labels
+                ax2.set_yticklabels([f'{max_mw - i*(max_mw/len(yticks)):.0f}' 
+                                for i in range(len(yticks))])
+            
+            ax2.set_ylabel('Capacity Lost (GW)', color='gray')
+            ax2.tick_params(axis='y', labelcolor='gray')
+        else:
+            ax2.set_yticks(plant_ticks)
+            ax2.set_yticklabels(mw_labels)
+            ax2.set_ylabel('Cumulative Capacity (GW)', color='gray')
+            ax2.tick_params(axis='y', labelcolor='gray')
         # Store the MW data for later use
         ax2.mw_data = mw_data
     
     # Create title with appropriate information
     variable_name = variable.replace('_', ' ').title()
     country_info = f" in {country}" if country is not None else ""
-    emitting_info = f" from {emitting_country}" if emitting_country is not None else ""
-    scenario_info = f" ({scenario} scenario)" if 'scenario' in data.dims else ""
     
-    title = f"{variable_name}{country_info}{emitting_info}{scenario_info}"
+    title = f"{variable_name}{country_info}{scenario_info}"
     if contour_variable is not None:
         title += f" with {contour_variable.replace('_', ' ').title()} contours"
     
@@ -410,9 +880,9 @@ def plot_variable_by_country(dataset, variable, country=None, emitting_country=N
         plt.tight_layout()
     return fig, ax
 
-def plot_comparison(age_ds, mw_ds, emis_intens_ds, variable, country=None, emitting_country=None, 
+def plot_comparison(age_ds, mw_ds, emis_intens_ds, variable, country=None,  
                    scenario='main', contour_variable=None, levels=10, figsize=(30, 8), 
-                   target_year=2040, target_co2=10):
+                   target_year=2040, target_co2=10, flip_y_axis = True):
     """
     Plot three side-by-side plots comparing the same variable across different datasets.
     
@@ -428,8 +898,6 @@ def plot_comparison(age_ds, mw_ds, emis_intens_ds, variable, country=None, emitt
         The variable to plot
     country : str or None
         Country receiving impacts to select
-    emitting_country : str or None
-        Country emitting pollutants to filter by (None for all emitting countries)
     scenario : str
         Scenario to plot
     contour_variable : str or None
@@ -452,19 +920,19 @@ def plot_comparison(age_ds, mw_ds, emis_intens_ds, variable, country=None, emitt
     fig, axes = plt.subplots(1, 3, figsize=figsize, sharey=True)
     
     # Plot for age-sorted dataset
-    plot_variable_by_country(age_ds, variable, country, emitting_country, scenario, 
+    plot_variable_by_country( age_ds, variable, country, scenario, 
                            contour_variable, levels, ax=axes[0],
                            target_year=target_year, target_co2=target_co2)
     axes[0].set_title("Sorted by Age (oldest first)")
     
     # Plot for size-sorted dataset
-    plot_variable_by_country(mw_ds, variable, country, emitting_country, scenario, 
+    plot_variable_by_country(mw_ds, variable, country, scenario, 
                            contour_variable, levels, ax=axes[1],
                            target_year=target_year, target_co2=target_co2)
     axes[1].set_title("Sorted by Plant Size (largest first)")
     
     # Plot for emission intensity-sorted dataset
-    plot_variable_by_country(emis_intens_ds, variable, country, emitting_country, scenario, 
+    plot_variable_by_country(emis_intens_ds, variable, country, scenario, 
                            contour_variable, levels, ax=axes[2],
                            target_year=target_year, target_co2=target_co2)
     axes[2].set_title("Sorted by Emission Intensity (highest first)")
@@ -981,3 +1449,527 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
     return (cumulative_emissions, co2_temp_response, 
             cumulative_bc_emissions, cumulative_dt_drf, cumulative_dt_snowrf, 
             total_bc_temp_response, total_temp_response)
+
+
+def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=2030, start_year=2000, end_year=2060, 
+                                                     shutdown_age=None, fraction_to_shutdown=None,
+                                                     tcr=1.65, tcr_uncertainty=0.4, 
+                                                     breakdown_by=None, show_lifetime_uncertainty=True, 
+                                                     lifetime_uncertainty=5, figsize=(14, 10)):
+    """
+    Plot cumulative CO2 and BC emissions and temperature responses over time,
+    with the option to shut down the oldest plants by a specified year.
+    
+    Parameters:
+    -----------
+    CGP_df : pandas.DataFrame
+        DataFrame containing power plant data
+    shutdown_year : int
+        Year to shut down the oldest plants (default: 2030)
+    start_year : int
+        Starting year for the analysis (default: 2000)
+    end_year : int
+        Ending year for the analysis (default: 2060)
+    shutdown_age : int, optional
+        Age of plants to shut down (e.g., shut down all plants older than X years by shutdown_year)
+        If None, uses fraction_to_shutdown instead
+    fraction_to_shutdown : float, optional
+        Fraction of oldest plants to shut down (0-1)
+        Only used if shutdown_age is None
+    tcr : float
+        Transient Climate Response factor in °C per 1000 GtCO2 (default: 1.65)
+    tcr_uncertainty : float
+        Uncertainty in TCR value (default: 0.4)
+    breakdown_by : str, optional
+        Column to break down emissions by (e.g., 'COUNTRY' or 'plant_type')
+    show_lifetime_uncertainty : bool
+        Whether to show shading for lifetime uncertainty (default: True)
+    lifetime_uncertainty : int
+        Number of years of uncertainty in plant lifetime (default: 5)
+    figsize : tuple
+        Figure size as (width, height)
+    
+    Returns:
+    --------
+    tuple
+        Contains arrays for emissions and temperature impacts for both baseline and early shutdown scenarios
+    """
+    # Set up time array
+    years = end_year - start_year
+    time_array = np.arange(start_year, end_year)
+    
+    # Create a sorted copy of the dataframe to identify the oldest plants
+    sorted_df = CGP_df.copy()
+    sorted_df['plant_age_at_shutdown'] = shutdown_year - sorted_df['Year_of_Commission']
+    
+    # Determine which plants to shut down
+    if shutdown_age is not None:
+        # Shut down plants older than shutdown_age by the shutdown year
+        plants_to_shutdown = sorted_df[sorted_df['plant_age_at_shutdown'] >= shutdown_age]['unique_ID'].values
+    elif fraction_to_shutdown is not None:
+        # Shut down the oldest fraction of plants
+        sorted_df = sorted_df.sort_values('Year_of_Commission')
+        num_plants_to_shutdown = int(len(sorted_df) * fraction_to_shutdown)
+        plants_to_shutdown = sorted_df.head(num_plants_to_shutdown)['unique_ID'].values
+    else:
+        # Default: shut down plants older than 20 years by the shutdown year
+        plants_to_shutdown = sorted_df[sorted_df['plant_age_at_shutdown'] >= 20]['unique_ID'].values
+    
+    # Initialize arrays for emissions and temperature responses (baseline scenario)
+    baseline_emissions = np.zeros(years)
+    baseline_bc_emissions = np.zeros(years)
+    baseline_dt_drf = np.zeros(years)
+    baseline_dt_snowrf = np.zeros(years)
+    
+    # Initialize arrays for emissions and temperature responses (shutdown scenario)
+    shutdown_emissions = np.zeros(years)
+    shutdown_bc_emissions = np.zeros(years)
+    shutdown_dt_drf = np.zeros(years)
+    shutdown_dt_snowrf = np.zeros(years)
+    
+    if show_lifetime_uncertainty:
+        # Baseline scenario
+        baseline_min_emissions = np.zeros(years)
+        baseline_max_emissions = np.zeros(years)
+        baseline_min_bc_emissions = np.zeros(years)
+        baseline_max_bc_emissions = np.zeros(years)
+        baseline_min_dt_drf = np.zeros(years)
+        baseline_max_dt_drf = np.zeros(years)
+        baseline_min_dt_snowrf = np.zeros(years)
+        baseline_max_dt_snowrf = np.zeros(years)
+        
+        # Shutdown scenario
+        shutdown_min_emissions = np.zeros(years)
+        shutdown_max_emissions = np.zeros(years)
+        shutdown_min_bc_emissions = np.zeros(years)
+        shutdown_max_bc_emissions = np.zeros(years)
+        shutdown_min_dt_drf = np.zeros(years)
+        shutdown_max_dt_drf = np.zeros(years)
+        shutdown_min_dt_snowrf = np.zeros(years)
+        shutdown_max_dt_snowrf = np.zeros(years)
+    
+    # If breaking down emissions, create separate arrays for each category
+    if breakdown_by:
+        categories = CGP_df[breakdown_by].unique()
+        
+        # Baseline scenario
+        baseline_category_emissions = {cat: np.zeros(years) for cat in categories}
+        baseline_category_bc_emissions = {cat: np.zeros(years) for cat in categories}
+        baseline_category_dt_drf = {cat: np.zeros(years) for cat in categories}
+        baseline_category_dt_snowrf = {cat: np.zeros(years) for cat in categories}
+        
+        # Shutdown scenario
+        shutdown_category_emissions = {cat: np.zeros(years) for cat in categories}
+        shutdown_category_bc_emissions = {cat: np.zeros(years) for cat in categories}
+        shutdown_category_dt_drf = {cat: np.zeros(years) for cat in categories}
+        shutdown_category_dt_snowrf = {cat: np.zeros(years) for cat in categories}
+        
+        if show_lifetime_uncertainty:
+            # Baseline scenario
+            baseline_category_min_emissions = {cat: np.zeros(years) for cat in categories}
+            baseline_category_max_emissions = {cat: np.zeros(years) for cat in categories}
+            baseline_category_min_bc_emissions = {cat: np.zeros(years) for cat in categories}
+            baseline_category_max_bc_emissions = {cat: np.zeros(years) for cat in categories}
+            baseline_category_min_dt_drf = {cat: np.zeros(years) for cat in categories}
+            baseline_category_max_dt_drf = {cat: np.zeros(years) for cat in categories}
+            baseline_category_min_dt_snowrf = {cat: np.zeros(years) for cat in categories}
+            baseline_category_max_dt_snowrf = {cat: np.zeros(years) for cat in categories}
+            
+            # Shutdown scenario
+            shutdown_category_min_emissions = {cat: np.zeros(years) for cat in categories}
+            shutdown_category_max_emissions = {cat: np.zeros(years) for cat in categories}
+            shutdown_category_min_bc_emissions = {cat: np.zeros(years) for cat in categories}
+            shutdown_category_max_bc_emissions = {cat: np.zeros(years) for cat in categories}
+            shutdown_category_min_dt_drf = {cat: np.zeros(years) for cat in categories}
+            shutdown_category_max_dt_drf = {cat: np.zeros(years) for cat in categories}
+            shutdown_category_min_dt_snowrf = {cat: np.zeros(years) for cat in categories}
+            shutdown_category_max_dt_snowrf = {cat: np.zeros(years) for cat in categories}
+    else:
+        categories = None
+        baseline_category_emissions = None
+        shutdown_category_emissions = None
+
+    # Calculate the shutdown year offset
+    shutdown_year_offset = shutdown_year - start_year
+    
+    # Process each plant
+    for unique_id in CGP_df['unique_ID'].values:
+        # Get plant data
+        plant_data = CGP_df.loc[CGP_df['unique_ID'] == unique_id]
+        
+        # Get annual values
+        annual_co2 = float(plant_data['ANNUALCO2']) / 1e9  # Convert to GtCO2
+        annual_bc = float(plant_data['BC_(g/yr)'])  # BC emissions in g/yr
+        annual_dt_drf = float(plant_data['dt_drf'])
+        annual_dt_snowrf = float(plant_data['dt_snowrf'])
+        
+        # Check if this plant is in the shutdown list
+        is_shutdown_plant = unique_id in plants_to_shutdown
+        
+        # Add to baseline emissions (all plants operate until end of life)
+        yr_offset = int(plant_data['Year_of_Commission'].iloc[0] - start_year)
+        if yr_offset >= 0:
+            # Standard operating life (40 years or until end of simulation)
+            operating_years = int(min(40, end_year - plant_data['Year_of_Commission'].iloc[0]))
+            
+            if operating_years > 0:
+                # Add values for each operating year (baseline scenario)
+                for yr in range(operating_years):
+                    if yr_offset + yr < years:
+                        baseline_emissions[yr_offset + yr] += annual_co2
+                        baseline_bc_emissions[yr_offset + yr] += annual_bc
+                        baseline_dt_drf[yr_offset + yr] += annual_dt_drf
+                        baseline_dt_snowrf[yr_offset + yr] += annual_dt_snowrf
+                        
+                        if breakdown_by:
+                            category = plant_data[breakdown_by].iloc[0]
+                            baseline_category_emissions[category][yr_offset + yr] += annual_co2
+                            baseline_category_bc_emissions[category][yr_offset + yr] += annual_bc
+                            baseline_category_dt_drf[category][yr_offset + yr] += annual_dt_drf
+                            baseline_category_dt_snowrf[category][yr_offset + yr] += annual_dt_snowrf
+                
+                # Add values for each operating year (shutdown scenario)
+                # If plant is to be shutdown early, only operate until shutdown year
+                shutdown_operating_years = operating_years
+                if is_shutdown_plant and shutdown_year_offset > yr_offset:
+                    shutdown_operating_years = min(operating_years, shutdown_year_offset - yr_offset)
+                
+                for yr in range(shutdown_operating_years):
+                    if yr_offset + yr < years:
+                        shutdown_emissions[yr_offset + yr] += annual_co2
+                        shutdown_bc_emissions[yr_offset + yr] += annual_bc
+                        shutdown_dt_drf[yr_offset + yr] += annual_dt_drf
+                        shutdown_dt_snowrf[yr_offset + yr] += annual_dt_snowrf
+                        
+                        if breakdown_by:
+                            category = plant_data[breakdown_by].iloc[0]
+                            shutdown_category_emissions[category][yr_offset + yr] += annual_co2
+                            shutdown_category_bc_emissions[category][yr_offset + yr] += annual_bc
+                            shutdown_category_dt_drf[category][yr_offset + yr] += annual_dt_drf
+                            shutdown_category_dt_snowrf[category][yr_offset + yr] += annual_dt_snowrf
+                
+                # Calculate lifetime uncertainty bounds
+                if show_lifetime_uncertainty:
+                    # Baseline scenario
+                    baseline_min_operating_years = int(max(0, operating_years - lifetime_uncertainty))
+                    baseline_max_operating_years = int(min(operating_years + lifetime_uncertainty, 
+                                                   end_year - plant_data['Year_of_Commission'].iloc[0]))
+                    
+                    # Shutdown scenario
+                    shutdown_min_operating_years = baseline_min_operating_years
+                    shutdown_max_operating_years = baseline_max_operating_years
+                    if is_shutdown_plant and shutdown_year_offset > yr_offset:
+                        shutdown_min_operating_years = min(shutdown_min_operating_years, shutdown_year_offset - yr_offset)
+                        shutdown_max_operating_years = min(shutdown_max_operating_years, shutdown_year_offset - yr_offset)
+                    
+                    # Minimum lifetime - baseline
+                    for yr in range(baseline_min_operating_years):
+                        if yr_offset + yr < years:
+                            baseline_min_emissions[yr_offset + yr] += annual_co2
+                            baseline_min_bc_emissions[yr_offset + yr] += annual_bc
+                            baseline_min_dt_drf[yr_offset + yr] += annual_dt_drf
+                            baseline_min_dt_snowrf[yr_offset + yr] += annual_dt_snowrf
+                            if breakdown_by:
+                                category = plant_data[breakdown_by].iloc[0]
+                                baseline_category_min_emissions[category][yr_offset + yr] += annual_co2
+                                baseline_category_min_bc_emissions[category][yr_offset + yr] += annual_bc
+                                baseline_category_min_dt_drf[category][yr_offset + yr] += annual_dt_drf
+                                baseline_category_min_dt_snowrf[category][yr_offset + yr] += annual_dt_snowrf
+                    
+                    # Maximum lifetime - baseline
+                    for yr in range(baseline_max_operating_years):
+                        if yr_offset + yr < years:
+                            baseline_max_emissions[yr_offset + yr] += annual_co2
+                            baseline_max_bc_emissions[yr_offset + yr] += annual_bc
+                            baseline_max_dt_drf[yr_offset + yr] += annual_dt_drf
+                            baseline_max_dt_snowrf[yr_offset + yr] += annual_dt_snowrf
+                            if breakdown_by:
+                                category = plant_data[breakdown_by].iloc[0]
+                                baseline_category_max_emissions[category][yr_offset + yr] += annual_co2
+                                baseline_category_max_bc_emissions[category][yr_offset + yr] += annual_bc
+                                baseline_category_max_dt_drf[category][yr_offset + yr] += annual_dt_drf
+                                baseline_category_max_dt_snowrf[category][yr_offset + yr] += annual_dt_snowrf
+                    
+                    # Minimum lifetime - shutdown
+                    for yr in range(shutdown_min_operating_years):
+                        if yr_offset + yr < years:
+                            shutdown_min_emissions[yr_offset + yr] += annual_co2
+                            shutdown_min_bc_emissions[yr_offset + yr] += annual_bc
+                            shutdown_min_dt_drf[yr_offset + yr] += annual_dt_drf
+                            shutdown_min_dt_snowrf[yr_offset + yr] += annual_dt_snowrf
+                            if breakdown_by:
+                                category = plant_data[breakdown_by].iloc[0]
+                                shutdown_category_min_emissions[category][yr_offset + yr] += annual_co2
+                                shutdown_category_min_bc_emissions[category][yr_offset + yr] += annual_bc
+                                shutdown_category_min_dt_drf[category][yr_offset + yr] += annual_dt_drf
+                                shutdown_category_min_dt_snowrf[category][yr_offset + yr] += annual_dt_snowrf
+                    
+                    # Maximum lifetime - shutdown
+                    for yr in range(shutdown_max_operating_years):
+                        if yr_offset + yr < years:
+                            shutdown_max_emissions[yr_offset + yr] += annual_co2
+                            shutdown_max_bc_emissions[yr_offset + yr] += annual_bc
+                            shutdown_max_dt_drf[yr_offset + yr] += annual_dt_drf
+                            shutdown_max_dt_snowrf[yr_offset + yr] += annual_dt_snowrf
+                            if breakdown_by:
+                                category = plant_data[breakdown_by].iloc[0]
+                                shutdown_category_max_emissions[category][yr_offset + yr] += annual_co2
+                                shutdown_category_max_bc_emissions[category][yr_offset + yr] += annual_bc
+                                shutdown_category_max_dt_drf[category][yr_offset + yr] += annual_dt_drf
+                                shutdown_category_max_dt_snowrf[category][yr_offset + yr] += annual_dt_snowrf
+
+    # Calculate cumulative values - baseline
+    baseline_cumulative_emissions = np.cumsum(baseline_emissions)
+    baseline_cumulative_bc_emissions = np.cumsum(baseline_bc_emissions)
+    baseline_cumulative_dt_drf = np.cumsum(baseline_dt_drf)
+    baseline_cumulative_dt_snowrf = np.cumsum(baseline_dt_snowrf)
+    
+    # Calculate cumulative values - shutdown
+    shutdown_cumulative_emissions = np.cumsum(shutdown_emissions)
+    shutdown_cumulative_bc_emissions = np.cumsum(shutdown_bc_emissions)
+    shutdown_cumulative_dt_drf = np.cumsum(shutdown_dt_drf)
+    shutdown_cumulative_dt_snowrf = np.cumsum(shutdown_dt_snowrf)
+    
+    if show_lifetime_uncertainty:
+        # Baseline scenario
+        baseline_min_cumulative = np.cumsum(baseline_min_emissions)
+        baseline_max_cumulative = np.cumsum(baseline_max_emissions)
+        baseline_min_cumulative_bc = np.cumsum(baseline_min_bc_emissions)
+        baseline_max_cumulative_bc = np.cumsum(baseline_max_bc_emissions)
+        baseline_min_cumulative_dt_drf = np.cumsum(baseline_min_dt_drf)
+        baseline_max_cumulative_dt_drf = np.cumsum(baseline_max_dt_drf)
+        baseline_min_cumulative_dt_snowrf = np.cumsum(baseline_min_dt_snowrf)
+        baseline_max_cumulative_dt_snowrf = np.cumsum(baseline_max_dt_snowrf)
+        
+        # Shutdown scenario
+        shutdown_min_cumulative = np.cumsum(shutdown_min_emissions)
+        shutdown_max_cumulative = np.cumsum(shutdown_max_emissions)
+        shutdown_min_cumulative_bc = np.cumsum(shutdown_min_bc_emissions)
+        shutdown_max_cumulative_bc = np.cumsum(shutdown_max_bc_emissions)
+        shutdown_min_cumulative_dt_drf = np.cumsum(shutdown_min_dt_drf)
+        shutdown_max_cumulative_dt_drf = np.cumsum(shutdown_max_dt_drf)
+        shutdown_min_cumulative_dt_snowrf = np.cumsum(shutdown_min_dt_snowrf)
+        shutdown_max_cumulative_dt_snowrf = np.cumsum(shutdown_max_dt_snowrf)
+    
+    # Calculate temperature responses - baseline
+    baseline_co2_temp_response = baseline_cumulative_emissions * (tcr / 1000)
+    baseline_co2_temp_upper = baseline_cumulative_emissions * ((tcr + tcr_uncertainty) / 1000)
+    baseline_co2_temp_lower = baseline_cumulative_emissions * ((tcr - tcr_uncertainty) / 1000)
+    
+    # Calculate temperature responses - shutdown
+    shutdown_co2_temp_response = shutdown_cumulative_emissions * (tcr / 1000)
+    shutdown_co2_temp_upper = shutdown_cumulative_emissions * ((tcr + tcr_uncertainty) / 1000)
+    shutdown_co2_temp_lower = shutdown_cumulative_emissions * ((tcr - tcr_uncertainty) / 1000)
+    
+    # Calculate total BC temperature response - baseline
+    baseline_bc_temp_response = baseline_cumulative_dt_drf + baseline_cumulative_dt_snowrf
+    if show_lifetime_uncertainty:
+        baseline_bc_temp_upper = baseline_max_cumulative_dt_drf + baseline_max_cumulative_dt_snowrf
+        baseline_bc_temp_lower = baseline_min_cumulative_dt_drf + baseline_min_cumulative_dt_snowrf
+    
+    # Calculate total BC temperature response - shutdown
+    shutdown_bc_temp_response = shutdown_cumulative_dt_drf + shutdown_cumulative_dt_snowrf
+    if show_lifetime_uncertainty:
+        shutdown_bc_temp_upper = shutdown_max_cumulative_dt_drf + shutdown_max_cumulative_dt_snowrf
+        shutdown_bc_temp_lower = shutdown_min_cumulative_dt_drf + shutdown_min_cumulative_dt_snowrf
+    
+    # Total temperature response (CO2 + BC) - baseline
+    baseline_total_temp_response = baseline_co2_temp_response + baseline_bc_temp_response
+    if show_lifetime_uncertainty:
+        baseline_total_temp_upper = baseline_co2_temp_upper + baseline_bc_temp_upper
+        baseline_total_temp_lower = baseline_co2_temp_lower + baseline_bc_temp_lower
+    
+    # Total temperature response (CO2 + BC) - shutdown
+    shutdown_total_temp_response = shutdown_co2_temp_response + shutdown_bc_temp_response
+    if show_lifetime_uncertainty:
+        shutdown_total_temp_upper = shutdown_co2_temp_upper + shutdown_bc_temp_upper
+        shutdown_total_temp_lower = shutdown_co2_temp_lower + shutdown_bc_temp_lower
+
+    # Create the 2x2 plot layout
+    fig, axs = plt.subplots(2, 2, figsize=figsize, sharex=True)
+    
+    # ----- Left side (CO2) -----
+    # Top-left: CO2 emissions
+    ax_co2_emissions = axs[0, 0]
+    
+    # Plot baseline emissions
+    ax_co2_emissions.plot(time_array, baseline_cumulative_emissions, 
+                        color='tab:blue', linewidth=2, linestyle='--', 
+                        label='Baseline Scenario')
+    
+    # Plot shutdown emissions
+    ax_co2_emissions.plot(time_array, shutdown_cumulative_emissions, 
+                        color='tab:blue', linewidth=2, 
+                        label=f'Early Shutdown ({shutdown_year})')
+    
+    # Add uncertainty if enabled
+    if show_lifetime_uncertainty:
+        # Baseline uncertainty
+        ax_co2_emissions.fill_between(time_array, baseline_min_cumulative, baseline_max_cumulative,
+                                    color='tab:blue', alpha=0.1)
+        
+        # Shutdown uncertainty
+        ax_co2_emissions.fill_between(time_array, shutdown_min_cumulative, shutdown_max_cumulative,
+                                    color='tab:blue', alpha=0.2)
+    
+    # Add vertical line at shutdown year
+    ax_co2_emissions.axvline(x=shutdown_year, color='red', linestyle='--', alpha=0.7)
+    
+    ax_co2_emissions.set_ylabel('Cumulative CO2 Emissions (GtCO2)')
+    ax_co2_emissions.set_title('CO2 Emissions', fontweight='bold')
+    ax_co2_emissions.grid(True, alpha=0.3)
+    ax_co2_emissions.legend(loc='upper left', fontsize='small')
+    
+    # Bottom-left: CO2 temperature response
+    ax_co2_temp = axs[1, 0]
+    
+    # Plot baseline temperature response
+    ax_co2_temp.plot(time_array, baseline_co2_temp_response,
+                   color='tab:red', linewidth=2, linestyle='--',
+                   label='Baseline Scenario')
+    
+    # Plot shutdown temperature response
+    ax_co2_temp.plot(time_array, shutdown_co2_temp_response,
+                   color='tab:red', linewidth=2,
+                   label=f'Early Shutdown ({shutdown_year})')
+    
+    # Add uncertainty if enabled
+    if show_lifetime_uncertainty:
+        # Baseline uncertainty (lifetime + TCR)
+        baseline_min_combined = baseline_min_cumulative * ((tcr - tcr_uncertainty) / 1000)
+        baseline_max_combined = baseline_max_cumulative * ((tcr + tcr_uncertainty) / 1000)
+        
+        ax_co2_temp.fill_between(time_array, baseline_min_combined, baseline_max_combined,
+                               color='tab:red', alpha=0.1)
+        
+        # Shutdown uncertainty (lifetime + TCR)
+        shutdown_min_combined = shutdown_min_cumulative * ((tcr - tcr_uncertainty) / 1000)
+        shutdown_max_combined = shutdown_max_cumulative * ((tcr + tcr_uncertainty) / 1000)
+        
+        ax_co2_temp.fill_between(time_array, shutdown_min_combined, shutdown_max_combined,
+                               color='tab:red', alpha=0.2)
+    
+    # Add vertical line at shutdown year
+    ax_co2_temp.axvline(x=shutdown_year, color='red', linestyle='--', alpha=0.7)
+    
+    ax_co2_temp.set_xlabel('Year')
+    ax_co2_temp.set_ylabel('Temperature Response (°C)')
+    ax_co2_temp.set_title('CO2 Temperature Impact', fontweight='bold')
+    ax_co2_temp.grid(True, alpha=0.3)
+    ax_co2_temp.legend(loc='upper left', fontsize='small')
+    
+    # ----- Right side (BC) -----
+    # Top-right: BC emissions
+    ax_bc_emissions = axs[0, 1]
+    
+    # Plot baseline BC emissions
+    ax_bc_emissions.plot(time_array, baseline_cumulative_bc_emissions, 
+                       color='tab:green', linewidth=2, linestyle='--',
+                       label='Baseline Scenario')
+    
+    # Plot shutdown BC emissions
+    ax_bc_emissions.plot(time_array, shutdown_cumulative_bc_emissions, 
+                       color='tab:green', linewidth=2,
+                       label=f'Early Shutdown ({shutdown_year})')
+    
+    # Add uncertainty if enabled
+    if show_lifetime_uncertainty:
+        # Baseline uncertainty
+        ax_bc_emissions.fill_between(time_array, baseline_min_cumulative_bc, baseline_max_cumulative_bc,
+                                   color='tab:green', alpha=0.1)
+        
+        # Shutdown uncertainty
+        ax_bc_emissions.fill_between(time_array, shutdown_min_cumulative_bc, shutdown_max_cumulative_bc,
+                                   color='tab:green', alpha=0.2)
+    
+    # Add vertical line at shutdown year
+    ax_bc_emissions.axvline(x=shutdown_year, color='red', linestyle='--', alpha=0.7)
+    
+    # Format y-axis for better readability
+    ax_bc_emissions.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
+    
+    ax_bc_emissions.set_ylabel('Cumulative BC Emissions (g)')
+    ax_bc_emissions.set_title('BC Emissions', fontweight='bold')
+    ax_bc_emissions.grid(True, alpha=0.3)
+    ax_bc_emissions.legend(loc='upper left', fontsize='small')
+    
+    # Bottom-right: BC temperature responses
+    ax_bc_temp = axs[1, 1]
+    
+    # Plot baseline BC temperature components
+    ax_bc_temp.plot(time_array, baseline_cumulative_dt_drf,
+                  color='tab:olive', linewidth=1, linestyle='--',
+                  label='Baseline BC DRF')
+    ax_bc_temp.plot(time_array, baseline_cumulative_dt_snowrf,
+                  color='tab:purple', linewidth=1, linestyle='--',
+                  label='Baseline BC Snow RF')
+    
+    # Plot shutdown BC temperature components
+    ax_bc_temp.plot(time_array, shutdown_cumulative_dt_drf,
+                  color='tab:olive', linewidth=1,
+                  label='Shutdown BC DRF')
+    ax_bc_temp.plot(time_array, shutdown_cumulative_dt_snowrf,
+                  color='tab:purple', linewidth=1,
+                  label='Shutdown BC Snow RF')
+    
+    # Plot total BC temperature impact
+    ax_bc_temp.plot(time_array, baseline_bc_temp_response,
+                  color='tab:blue', linewidth=2, linestyle='--',
+                  label='Baseline Total BC')
+    ax_bc_temp.plot(time_array, shutdown_bc_temp_response,
+                  color='tab:blue', linewidth=2,
+                  label='Shutdown Total BC')
+    
+    # Add uncertainty if enabled
+    if show_lifetime_uncertainty:
+        # Baseline uncertainty
+        ax_bc_temp.fill_between(time_array, baseline_bc_temp_lower, baseline_bc_temp_upper,
+                              color='tab:blue', alpha=0.1)
+        
+        # Shutdown uncertainty
+        ax_bc_temp.fill_between(time_array, shutdown_bc_temp_lower, shutdown_bc_temp_upper,
+                              color='tab:blue', alpha=0.2)
+    
+    # Add vertical line at shutdown year
+    ax_bc_temp.axvline(x=shutdown_year, color='red', linestyle='--', alpha=0.7)
+    
+    ax_bc_temp.set_xlabel('Year')
+    ax_bc_temp.set_ylabel('Cumulative Temperature Response (°C)')
+    ax_bc_temp.set_title('BC Temperature Impact', fontweight='bold')
+    ax_bc_temp.grid(True, alpha=0.3)
+    ax_bc_temp.legend(loc='upper left', fontsize='small')
+    
+    # Add a figure title
+    plt.suptitle(f'Climate Impacts of Early Coal Plant Shutdown ({shutdown_year})', 
+                fontsize=16, y=0.98)
+    
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 1, 0.95])  # Make room for the suptitle
+    
+    return {
+        'baseline': {
+            'co2_emissions': baseline_cumulative_emissions,
+            'bc_emissions': baseline_cumulative_bc_emissions,
+            'co2_temp': baseline_co2_temp_response,
+            'bc_temp_drf': baseline_cumulative_dt_drf,
+            'bc_temp_snow': baseline_cumulative_dt_snowrf,
+            'bc_temp_total': baseline_bc_temp_response,
+            'total_temp': baseline_total_temp_response
+        },
+        'shutdown': {
+            'co2_emissions': shutdown_cumulative_emissions,
+            'bc_emissions': shutdown_cumulative_bc_emissions,
+            'co2_temp': shutdown_co2_temp_response,
+            'bc_temp_drf': shutdown_cumulative_dt_drf,
+            'bc_temp_snow': shutdown_cumulative_dt_snowrf,
+            'bc_temp_total': shutdown_bc_temp_response,
+            'total_temp': shutdown_total_temp_response
+        },
+        'avoided': {
+            'co2_emissions': baseline_cumulative_emissions - shutdown_cumulative_emissions,
+            'bc_emissions': baseline_cumulative_bc_emissions - shutdown_cumulative_bc_emissions,
+            'co2_temp': baseline_co2_temp_response - shutdown_co2_temp_response,
+            'bc_temp_total': baseline_bc_temp_response - shutdown_bc_temp_response,
+            'total_temp': baseline_total_temp_response - shutdown_total_temp_response
+        }
+    }
