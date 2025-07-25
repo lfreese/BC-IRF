@@ -1,4 +1,4 @@
-#!/home/emfreese/anaconda3/envs/gchp/bin/python
+#!/home/emfreese/miniconda3/envs/bc-irf/bin/python
 #SBATCH --time=4-00:00:00
 
 #SBATCH --cpus-per-task=1
@@ -12,7 +12,7 @@ import psutil
 import argparse
 import xesmf as xe
 import gc
-import g
+import geopandas
 import dask.array as da
 import scipy.signal as signal
 import sparse
@@ -73,7 +73,7 @@ print('Emis data prepped and loaded')
 
 country_mask = regionmask.defined_regions.natural_earth_v5_0_0.countries_50
 country_df = geopandas.read_file(f'{utils.raw_data_in_path}/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp')
-countries = ['China','Australia', 'India','Myanmar', 'Cambodia', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan','Brunei','Singapore', 'Papua New Guinea', 'Solomon Islands', 'East Timor', 'Taiwan']
+countries = ['China','Australia', 'India','Myanmar', 'Cambodia', 'Laos','Philippines','Nepal','Bangladesh','Thailand','Bhutan','Brunei','Singapore', 'Papua New Guinea', 'Solomon Islands', 'East Timor', 'Taiwan', 'Malaysia','Cambodia', 'Vietnam','Indonesia']
 country_df = country_df.rename(columns = {'SOVEREIGNT':'country'})
 
 ds_area = xr.open_dataset('/net/fs11/d0/emfreese/GCrundirs/IRF_runs/stretch_2x_pulse/SEA/Jan/mod_output/GEOSChem.SpeciesConc.20160101_0000z.nc4', engine = 'netcdf4')

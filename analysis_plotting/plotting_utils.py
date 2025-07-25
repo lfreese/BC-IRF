@@ -370,8 +370,347 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
         plt.savefig(save_path, bbox_inches='tight', dpi=300)
     
     return fig, axes
+
+
+def create_vietnam_retirement_trajectories(full_ds, target_year=2040, plants_per_year=None, 
+                                          force_closure_by=2040, country='VIETNAM', 
+                                          impact_var='BC_pop_weight_mean_conc', 
+                                          impacted_country='China',
+                                          strategies=['Year_of_Commission', 'MW', 'CO2_weighted_capacity_1000tonsperMW']):
+    """
+    Create retirement trajectories for Vietnam coal plants to reach zero by a target year
+    or by retiring a specific number of plants per year, with forced closure by a certain year.
+    
+    Parameters:
+    -----------
+    full_ds : xarray.Dataset
+        Dataset containing power plant data
+    target_year : int
+        Year by which all plants should be closed (default: 2040)
+    plants_per_year : float or None
+        Number of plants to retire each year. If None, calculated based on target_year.
+    force_closure_by : int
+        Mandatory year by which all plants must be closed, regardless of plants_per_year rate
+        (default: 2040)
+    country : str
+        Country whose plants to analyze (default: 'VIETNAM')
+    impact_var : str
+        Variable to measure impact (default: 'BC_pop_weight_mean_conc')
+    impacted_country : str
+        Country receiving impacts (default: 'China')
+    strategies : list
+        List of variables to use for sorting plants (default: age, size, emissions intensity)
+        
+    Returns:
+    --------
+    dict
+        Dictionary containing trajectory datasets for each strategy
+    """
+    # Filter for just the specified country's plants
+    country_ds = full_ds.where(full_ds['country_emitting'] == country, drop=True)
+    
+    # Get the number of plants
+    n_plants = len(country_ds['unique_ID'])
+    
+    # Current year (starting point)
+    start_year = 2023
+    
+    # Calculate plants per year or adjust target year if plants_per_year is given
+    if plants_per_year is None:
+        years_to_retirement = target_year - start_year
+        plants_per_year = n_plants / years_to_retirement
+        calculated_final_year = target_year
+    else:
+        # If plants_per_year is provided, calculate when all plants will be closed
+        years_to_retirement = int(np.ceil(n_plants / plants_per_year))
+        calculated_final_year = start_year + years_to_retirement
+        
+    # Final year is either the calculated year or the forced closure year, whichever comes first
+    final_year = min(calculated_final_year, force_closure_by)
+    
+    # Create year array for the transition period
+    year_array = np.arange(start_year, final_year + 1)
+    n_years = len(year_array)
+    
+    # Initialize dictionary to store results for each strategy
+    trajectory_results = {}
+    
+    # Process each strategy
+    for strategy in strategies:
+        # Sort the dataset by the strategy variable
+        if strategy == 'Year_of_Commission':
+            # Oldest first (ascending order)
+            sorted_ds = country_ds.sortby(strategy, ascending=True)
+        else:
+            # Largest or most polluting first (descending order)
+            sorted_ds = country_ds.sortby(strategy, ascending=False)
+        
+        # Get the sorted IDs
+        sorted_ids = sorted_ds['unique_ID'].values
+        
+        # Initialize arrays to store results
+        active_plants = np.zeros(n_years)
+        co2_emissions = np.zeros(n_years)
+        bc_emissions = np.zeros(n_years)
+        bc_concentration = np.zeros(n_years)
+        mw_capacity = np.zeros(n_years)
+        
+        # Set initial values (all plants operating)
+        active_plants[0] = n_plants
+        co2_emissions[0] = sorted_ds['co2_emissions'].sum().values
+        bc_emissions[0] = sorted_ds['BC_(g/yr)'].sum().values if 'BC_(g/yr)' in sorted_ds else 0
+        
+        # Sum the impact variable for the impacted country
+        if impacted_country in sorted_ds[impact_var].coords.get('country_impacted', []):
+            bc_concentration[0] = sorted_ds[impact_var].sel(
+                scenario='main', 
+                country_impacted=impacted_country
+            ).sum().values
+        
+        # Sum MW capacity
+        mw_capacity[0] = sorted_ds['MW'].sum().values if 'MW' in sorted_ds else 0
+        
+        # Calculate values for each year in the retirement trajectory
+        for i, year in enumerate(year_array[1:], 1):
+            # Calculate how many plants should be closed by this year based on the retirement rate
+            plants_to_close = min(n_plants, int(i * plants_per_year))
+            
+            # If this is the final year and we still have plants, close all remaining plants
+            if year == final_year:
+                plants_to_close = n_plants
+                
+            plants_remaining = n_plants - plants_to_close
+            active_plants[i] = plants_remaining
+            
+            # If all plants are closed, values are zero
+            if plants_remaining <= 0:
+                co2_emissions[i] = 0
+                bc_emissions[i] = 0
+                bc_concentration[i] = 0
+                mw_capacity[i] = 0
+                continue
+            
+            # Calculate emissions and impacts from remaining plants
+            remaining_ids = sorted_ids[plants_to_close:]
+            remaining_ds = country_ds.sel(unique_ID=remaining_ids)
+            
+            co2_emissions[i] = remaining_ds['co2_emissions'].sum().values
+            bc_emissions[i] = remaining_ds['BC_(g/yr)'].sum().values if 'BC_(g/yr)' in remaining_ds else 0
+            
+            # Sum the impact variable for the impacted country
+            if impacted_country in remaining_ds[impact_var].coords.get('country_impacted', []):
+                bc_concentration[i] = remaining_ds[impact_var].sel(
+                    scenario='main', 
+                    country_impacted=impacted_country
+                ).sum().values
+            
+            # Sum MW capacity
+            mw_capacity[i] = remaining_ds['MW'].sum().values if 'MW' in remaining_ds else 0
+        
+        # Store results in dictionary
+        trajectory_results[strategy] = {
+            'years': year_array,
+            'active_plants': active_plants,
+            'co2_emissions': co2_emissions,
+            'bc_emissions': bc_emissions,
+            'bc_concentration': bc_concentration,
+            'mw_capacity': mw_capacity,
+            'plants_per_year': plants_per_year,
+            'target_year': final_year,
+            'calculated_final_year': calculated_final_year,
+            'forced_closure': (calculated_final_year > force_closure_by)
+        }
+    
+    return trajectory_results
+
+def compare_vietnam_strategies_and_rates(full_ds, rates=[1.0, 2.0], 
+                                        force_closure_by=2040, 
+                                        country='VIETNAM',
+                                        strategies=['Year_of_Commission', 'MW', 'CO2_weighted_capacity_1000tonsperMW'],
+                                        impact_var='BC_pop_weight_mean_conc',
+                                        impacted_country='China',
+                                        figsize=(15, 12)):
+    """
+    Compare different retirement strategies AND rates for Vietnam coal plants on a single plot.
+    
+    Parameters:
+    -----------
+    full_ds : xarray.Dataset
+        Dataset containing power plant data
+    rates : list
+        List of plants-per-year retirement rates to compare
+    force_closure_by : int
+        Year by which all plants must be closed
+    country : str
+        Country to analyze
+    strategies : list
+        List of strategies to compare
+    impact_var : str
+        Variable for impact measurement
+    impacted_country : str
+        Country receiving impacts
+    figsize : tuple
+        Figure size
+        
+    Returns:
+    --------
+    fig, axs : matplotlib Figure and Axes objects
+    """
+    # Create figure with 4 subplots (removed BC emissions, showing only cumulative CO2)
+    fig, axs = plt.subplots(4, 1, figsize=figsize, sharex=True)
+    
+    # Strategy name mapping
+    strategy_names = {
+        'Year_of_Commission': 'Oldest First',
+        'MW': 'Largest First',
+        'CO2_weighted_capacity_1000tonsperMW': 'Most Polluting First'
+    }
+    
+    # Define colors for different strategies
+    strategy_colors = {
+        'Year_of_Commission': 'navy',
+        'MW': 'goldenrod',
+        'CO2_weighted_capacity_1000tonsperMW': 'teal'
+    }
+    
+    # Define line styles for different rates
+    linestyles = ['-', '--', '-.', ':']
+    if len(rates) > len(linestyles):
+        linestyles = linestyles * (len(rates) // len(linestyles) + 1)
+    
+    # Store cumulative CO2 data for each strategy and rate
+    cumulative_co2_data = {}
+    
+    # Find the latest end year across all trajectories for extending plots
+    max_end_year = 2023  # Start with the minimum start year
+    
+    # First pass to determine the maximum end year
+    for strategy in strategies:
+        for rate in rates:
+            trajectories = create_vietnam_retirement_trajectories(
+                full_ds, plants_per_year=rate, force_closure_by=force_closure_by,
+                country=country, impact_var=impact_var, impacted_country=impacted_country,
+                strategies=[strategy]
+            )
+            data = trajectories[strategy]
+            max_end_year = max(max_end_year, data['years'][-1])
+    
+    # Plot each combination of strategy and rate
+    for i, strategy in enumerate(strategies):
+        strategy_name = strategy_names.get(strategy, strategy)
+        strategy_color = strategy_colors.get(strategy, f'C{i}')
+        
+        for j, rate in enumerate(rates):
+            # Generate trajectory for this combination
+            trajectories = create_vietnam_retirement_trajectories(
+                full_ds, 
+                plants_per_year=rate,
+                force_closure_by=force_closure_by,
+                country=country,
+                impact_var=impact_var,
+                impacted_country=impacted_country,
+                strategies=[strategy]
+            )
+            
+            # Extract data
+            data = trajectories[strategy]
+            years = data['years']
+            
+            # Check if this rate results in forced closure
+            forced_closure = data.get('forced_closure', False)
+            calculated_final_year = data.get('calculated_final_year', force_closure_by)
+            
+            # Create label
+            if forced_closure:
+                label = f"{strategy_name} ({rate} plants/yr, forced closure)"
+            else:
+                label = f"{strategy_name} ({rate} plants/yr)"
+            
+            # Plot in each subplot with consistent formatting
+            ls = linestyles[j % len(linestyles)]
+            
+            # Calculate cumulative CO2 emissions
+            cumulative_co2 = np.cumsum(data['co2_emissions'])
+            cumulative_co2_data[(strategy, rate)] = (years, cumulative_co2)
+            
+            # Get the final values to extend flat lines if needed
+            final_plants = data['active_plants'][-1]
+            final_capacity = data['mw_capacity'][-1]
+            final_cumulative_co2 = cumulative_co2[-1]
+            final_bc_concentration = data['bc_concentration'][-1]
+            
+            # If this trajectory ends before the max_end_year, extend it with flat lines
+            if years[-1] < max_end_year:
+                # Create extension points
+                extended_years = np.arange(years[-1] + 1, max_end_year + 1)
+                extended_plants = np.ones_like(extended_years) * final_plants
+                extended_capacity = np.ones_like(extended_years) * final_capacity
+                extended_cumulative_co2 = np.ones_like(extended_years) * final_cumulative_co2
+                extended_bc_concentration = np.ones_like(extended_years) * final_bc_concentration
+                
+                # Combine original and extension
+                full_years = np.concatenate([years, extended_years])
+                full_plants = np.concatenate([data['active_plants'], extended_plants])
+                full_capacity = np.concatenate([data['mw_capacity'], extended_capacity])
+                full_cumulative_co2 = np.concatenate([cumulative_co2, extended_cumulative_co2])
+                full_bc_concentration = np.concatenate([data['bc_concentration'], extended_bc_concentration])
+            else:
+                # Use original data without extension
+                full_years = years
+                full_plants = data['active_plants']
+                full_capacity = data['mw_capacity']
+                full_cumulative_co2 = cumulative_co2
+                full_bc_concentration = data['bc_concentration']
+            
+            # 1. Plants remaining
+            axs[0].plot(full_years, full_plants, 
+                      color=strategy_color, linestyle=ls, linewidth=2, label=label)
+            
+            # 2. MW capacity
+            axs[1].plot(full_years, full_capacity/1000, 
+                      color=strategy_color, linestyle=ls, linewidth=2)
+            
+            # 3. Cumulative CO2 emissions
+            axs[2].plot(full_years, full_cumulative_co2, 
+                      color=strategy_color, linestyle=ls, linewidth=2)
+            
+            # 4. BC concentration
+            axs[3].plot(full_years, full_bc_concentration, 
+                      color=strategy_color, linestyle=ls, linewidth=2)
+    
+    # Add vertical line for forced closure year
+    for ax in axs:
+        ax.axvline(x=force_closure_by, color='black', linestyle='--', 
+                  label=f'Final Closure Year ({force_closure_by})')
+    
+    # Set titles and labels
+    axs[0].set_title(f'Vietnam Coal Plant Retirement Strategy Comparison', fontsize=14)
+    axs[0].set_ylabel('Plants Remaining')
+    
+    axs[1].set_ylabel('Capacity (GW)')
+    axs[1].set_title('Remaining Coal Power Capacity')
+    
+    axs[2].set_ylabel('Cumulative CO₂ (Gt)')
+    axs[2].set_title('Cumulative CO₂ Emissions')
+    
+    axs[3].set_ylabel('BC Concentration (ng/m³)')
+    axs[3].set_title(f'Black Carbon Concentration Impact on {impacted_country}')
+    axs[3].set_xlabel('Year')
+    
+    # Add grid to all plots
+    for ax in axs:
+        ax.grid(True, alpha=0.3)
+    
+    # Add legend to first plot with smaller font and more columns
+    axs[0].legend(loc='upper right', fontsize=8, ncol=2)
+    
+    plt.tight_layout()
+    
+    return fig, axs, cumulative_co2_data
+
+
 def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, location='all', 
-                               variable='BC_pop_weight_mean_conc', top_n=10):
+                               variable='BC_pop_weight_mean_conc', top_n=10, allow_loops=False):
     """
     Create side-by-side Sankey diagrams from the concentration data prepared for mapping,
     showing both regular and normalized data.
@@ -391,6 +730,9 @@ def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, locatio
         Variable to visualize (e.g., 'BC_pop_weight_mean_conc')
     top_n : int
         Number of top receptor countries to include
+    allow_loops : bool
+        Whether to allow flows to loop back to source countries (default: False)
+        If False and a country appears as both source and target, creates separate nodes
     
     Returns:
     --------
@@ -403,10 +745,10 @@ def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, locatio
     
     # Define a colormap for source countries
     source_colors = {
-        'MALAYSIA': '#AAA662',  # SaddleBrown
-        'CAMBODIA': '#029386',  # OrangeRed
-        'INDONESIA': '#FF6347', # DeepPink
-        'VIETNAM': '#DAA520'    # Gold
+        'MALAYSIA': '#AAA662',  
+        'CAMBODIA': '#029386',  
+        'INDONESIA': '#FF6347', 
+        'VIETNAM': '#DAA520'    
     }
     
     # Check if the location is valid
@@ -483,8 +825,13 @@ def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, locatio
                         country_grouped = country_data.reset_index()
                         country_grouped = country_grouped.groupby('country_impacted')[variable].sum().reset_index()
                     
-                    # Filter to only include top receptor countries
-                    country_grouped = country_grouped[country_grouped['country_impacted'].isin(top_receptors['country_impacted'])]
+                    # Filter to include top receptor countries and source countries if needed
+                    target_list = top_receptors['country_impacted'].tolist()
+                    if not allow_loops:
+                        # Add source countries as potential targets
+                        target_list += [c.capitalize() for c in source_countries]
+                    
+                    country_grouped = country_grouped[country_grouped['country_impacted'].isin(target_list)]
                     
                     if not country_grouped.empty:
                         country_dfs[country] = country_grouped
@@ -496,14 +843,47 @@ def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, locatio
             all_labels = []
             all_colors = []
             
-            # Create nodes list and mapping
+            # Create nodes list
             source_nodes = [country.title() for country in country_dfs.keys()]
-            target_nodes = top_receptors['country_impacted'].tolist()
-            all_nodes = source_nodes + target_nodes
+            
+            # Create target nodes list (including source countries that appear as targets)
+            target_nodes = []
+            for _, df in country_dfs.items():
+                for receptor in df['country_impacted'].unique():
+                    if receptor not in target_nodes:
+                        target_nodes.append(receptor)
+            
+            # Create a mapping for nodes that would cause self-loops
+            # For source countries that are also targets, create a separate "copy" node
+            dual_role_nodes = {}
+            for country in source_countries:
+                cap_country = country.capitalize()
+                if cap_country in target_nodes and not allow_loops:
+                    # Create a target-specific label but use the same display name
+                    dual_role_nodes[cap_country] = f"{cap_country} (recipient)"
+            
+            # Add regular target nodes
+            all_nodes = source_nodes.copy()
+            
+            # Add target nodes (using the dual role mapping where needed)
+            for node in target_nodes:
+                if node in [c.title() for c in source_nodes] and not allow_loops:
+                    # This is a source country that's also a target - use the mapped version
+                    all_nodes.append(dual_role_nodes.get(node, node))
+                elif node not in all_nodes:
+                    all_nodes.append(node)
+            
+            # Create node index mapping
             node_indices = {}
             for i, node in enumerate(all_nodes):
-                if node.upper() in source_countries:
+                if '(recipient)' in node:
+                    # Map both the display name and the internal name
+                    original_name = node.split(' (recipient)')[0]
+                    node_indices[original_name] = i
+                    node_indices[node] = i
+                elif node.upper() in source_countries:
                     node_indices[node.upper()] = i
+                    node_indices[node] = i  # Also map capitalized version
                 else:
                     node_indices[node] = i
             
@@ -515,12 +895,27 @@ def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, locatio
                     value = row[variable]
                     if np.isnan(value) or value <= 0:
                         continue
+                    
+                    # Check if this would be a self-loop
+                    source_title = source_country.title()
+                    if receptor.upper() == source_country or receptor == source_title:
+                        if not allow_loops:
+                            # Use the dual role node instead
+                            target_idx = node_indices[dual_role_nodes.get(receptor, receptor)]
+                        else:
+                            # Allow the self-loop
+                            target_idx = source_idx
+                    else:
+                        # Regular target
+                        target_idx = node_indices[receptor]
+                    
+                    # Skip if it's still a self-loop (should not happen with our logic)
+                    if source_idx == target_idx and not allow_loops:
+                        continue
                         
-                    target_idx = node_indices[receptor]
                     all_sources.append(source_idx)
                     all_targets.append(target_idx)
                     all_values.append(value)
-                    source_title = source_country.title()
                     
                     # Format the label differently based on regular vs normalized data
                     if data_idx == 0:  # Regular data
@@ -534,21 +929,32 @@ def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, locatio
                     rgba_color = f"rgba{tuple(int(source_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (0.5,)}"
                     all_colors.append(rgba_color)
             
-            # Create node colors - source nodes get their country color, target nodes are gray
+            # Create node colors and labels
             node_colors = []
+            node_labels = []
             for node in all_nodes:
-                if node.upper() in source_colors:
-                    node_colors.append(source_colors[node.upper()])
+                # Get the display name (remove the (recipient) part for display)
+                if '(recipient)' in node:
+                    display_name = node.split(' (recipient)')[0]
+                    node_labels.append(display_name)
                 else:
-                    node_colors.append("black")
+                    node_labels.append(node)
+                
+                # Set the color
+                if node.upper() in source_colors or node.split(' ')[0].upper() in source_colors:
+                    country = node.upper() if node.upper() in source_colors else node.split(' ')[0].upper()
+                    node_colors.append(source_colors[country])
+                else:
+                    node_colors.append("gray")
                     
             # Create Sankey diagram
             sankey = go.Sankey(
+                arrangement = 'snap',
                 node = dict(
-                    pad = 5,
-                    thickness = 20,
+                    pad = 15,
+                    thickness = 25,
                     line = dict(color = "black", width = 0.5),
-                    label = all_nodes,
+                    label = node_labels,
                     color = node_colors
                 ),
                 link = dict(
@@ -577,6 +983,170 @@ def create_sankey_from_map_data(regular_data, norm_data=None, year=2040, locatio
     
     return fig
 
+def create_multi_source_sankey(regular_data, year=2040, variable='BC_pop_weight_mean_conc', top_n=10):
+    """
+    Create four side-by-side Sankey diagrams, one for each source country,
+    showing flows to all recipient countries except itself.
+    
+    Parameters:
+    -----------
+    regular_data : dict
+        Output from prepare_concentration_data function for regular data
+    year : int
+        Year to visualize
+    variable : str
+        Variable to visualize (e.g., 'BC_pop_weight_mean_conc')
+    top_n : int
+        Number of top receptor countries to include for each source
+    
+    Returns:
+    --------
+    plotly.graph_objects.Figure
+        Figure containing four Sankey diagrams
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    import numpy as np
+    
+    # Define a colormap for source countries
+    source_colors = {
+        'MALAYSIA': '#AAA662',  
+        'CAMBODIA': '#029386',  
+        'INDONESIA': '#FF6347', 
+        'VIETNAM': '#DAA520'    
+    }
+    
+    # Source countries to create diagrams for
+    source_countries = ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']
+    
+    # Create subplots - one for each source country
+    fig = make_subplots(
+        rows=1, cols=4,
+        #subplot_titles=[f"From {country.title()}" for country in source_countries],
+        specs=[[{"type": "sankey"} for _ in range(4)]],
+        horizontal_spacing=0.01
+    )
+    
+    # Process each source country
+    for col_idx, source_country in enumerate(source_countries):
+        # Check if the source country is in the data
+        if source_country not in regular_data:
+            continue
+            
+        # Get data for the specified year and source country
+        try:
+            data_df = regular_data[source_country][year].copy()
+            
+            # Group by country_impacted and sum the values
+            if isinstance(data_df, pd.DataFrame):
+                grouped_df = data_df.groupby(data_df.index)[variable].sum().reset_index()
+                grouped_df.columns = ['country_impacted', variable]
+            else:
+                grouped_df = data_df.reset_index()
+                grouped_df = grouped_df.groupby('country_impacted')[variable].sum().reset_index()
+            
+        except KeyError:
+            continue
+        
+        # Remove NaN values and the source country itself
+        grouped_df = grouped_df.dropna(subset=[variable])
+        grouped_df = grouped_df[grouped_df['country_impacted'] != source_country.capitalize()]
+        
+        if grouped_df.empty:
+            continue
+        
+        # Sort by impact and get top receptors
+        top_receptors = grouped_df.sort_values(variable, ascending=False).head(top_n)
+        
+        # Prepare data for Sankey diagram
+        # Single source node
+        source_node = source_country.title()
+        target_nodes = top_receptors['country_impacted'].tolist()
+        
+        # Create node list
+        all_nodes = [source_node] + target_nodes
+        
+        # Create node index mapping
+        node_indices = {node: i for i, node in enumerate(all_nodes)}
+        
+        # Create links
+        sources = []
+        targets = []
+        values = []
+        labels = []
+        colors = []
+        
+        source_idx = 0  # Source is always the first node
+        
+        for _, row in top_receptors.iterrows():
+            receptor = row['country_impacted']
+            value = row[variable]
+            
+            if np.isnan(value) or value <= 0:
+                continue
+                
+            target_idx = node_indices[receptor]
+            
+            sources.append(source_idx)
+            targets.append(target_idx)
+            values.append(value)
+            
+            # Format label
+            labels.append(f"{source_node} → {receptor}: {value:.2e}")
+            
+            # Add color based on source country
+            source_color = source_colors[source_country]
+            # Convert to rgba with transparency
+            rgba_color = f"rgba{tuple(int(source_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (0.7,)}"
+            colors.append(rgba_color)
+        
+        # Create node colors and labels
+        node_colors = []
+        node_labels = []
+        
+        for node in all_nodes:
+            node_labels.append(node)
+            
+            if node == source_node:
+                node_colors.append(source_colors[source_country])
+            else:
+                node_colors.append("gray")
+        
+        # Create Sankey diagram
+        sankey = go.Sankey(
+            arrangement = 'snap',
+            node = dict(
+                pad = 10,
+                thickness = 20,
+                line = dict(color = "black", width = 0.5),
+                label = node_labels,
+                color = node_colors
+            ),
+            link = dict(
+                source = sources,
+                target = targets,
+                value = values,
+                label = labels,
+                color = colors
+            )
+        )
+        
+        # Add to subplot
+        fig.add_trace(
+            sankey,
+            row=1, 
+            col=col_idx + 1
+        )
+    
+    # Update layout
+    fig.update_layout(
+        font_size=10,
+        height=500,
+        width=1200,
+        margin=dict(l=10, r=10, b=10, t=40)
+    )
+    
+    return fig
 def analyze_emissions_by_var(full_ds, var, country= None):
     """
     Analyze emissions by progressively including plants sorted by commissioning year.
