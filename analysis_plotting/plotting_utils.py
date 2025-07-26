@@ -44,12 +44,11 @@ def prepare_concentration_data(full_ds, gdf, map_locations, shutdown_years,
         for yr in shutdown_years:
             # Get concentration data
             if loc == 'all':
-                data = full_ds[variable].sel(closure_year=yr).sel(scenario = 'main').sum(dim='unique_ID')
+                data = full_ds[variable].sel(scenario_year=yr).sum(dim='unique_ID')
             else:
                 data = (full_ds
                        .where(full_ds.country_emitting == loc, drop=True)
-                       .sel(closure_year=yr)[variable]
-                       .sel(scenario = 'main')
+                       .sel(scenario_year=yr)[variable]
                        .sum(dim='unique_ID'))
             
             # Create GeoDataFrame
@@ -463,7 +462,6 @@ def create_vietnam_retirement_trajectories(full_ds, target_year=2040, plants_per
         # Sum the impact variable for the impacted country
         if impacted_country in sorted_ds[impact_var].coords.get('country_impacted', []):
             bc_concentration[0] = sorted_ds[impact_var].sel(
-                scenario='main', 
                 country_impacted=impacted_country
             ).sum().values
         
@@ -500,7 +498,6 @@ def create_vietnam_retirement_trajectories(full_ds, target_year=2040, plants_per
             # Sum the impact variable for the impacted country
             if impacted_country in remaining_ds[impact_var].coords.get('country_impacted', []):
                 bc_concentration[i] = remaining_ds[impact_var].sel(
-                    scenario='main', 
                     country_impacted=impacted_country
                 ).sum().values
             
@@ -1191,7 +1188,7 @@ def analyze_emissions_by_var(full_ds, var, country= None):
     
     return age_ds, bckg_age_ds
 
-def plot_variable_by_country(dataset, variable, country=None, scenario=None, 
+def plot_variable_by_country(dataset, variable, country=None,
                            contour_variable=None, levels=10,
                            figsize=(10, 6), ax=None, target_year=2040, target_co2=0.001,
                            xlim=None, ylim=None, vmin=None, vmax=None, 
@@ -1207,9 +1204,7 @@ def plot_variable_by_country(dataset, variable, country=None, scenario=None,
         The variable to plot (e.g., 'BC_surface_mean_conc', 'co2_emissions')
     country : str or None
         Country receiving impacts to select (None for variables without country dimension)
-    scenario : str or None
-        Scenario to plot. If None, no scenario selection is applied.
-        If provided but 'scenario' isn't in data.dims, this parameter is ignored.
+    
     contour_variable : str or None
         Optional second variable to plot as contours
     levels : int
@@ -1250,13 +1245,6 @@ def plot_variable_by_country(dataset, variable, country=None, scenario=None,
     if country is not None and 'country_impacted' in data.dims:
         data = data.sel(country_impacted=country)
     
-    # Apply scenario selection ONLY if scenario dimension exists
-    if scenario is not None and 'scenario' in data.dims:
-        data = data.sel(scenario=scenario)
-        scenario_info = f" ({scenario} scenario)"
-    else:
-        scenario_info = ""
-    
     # Plot the main data with custom color limits if provided
     kwargs = {'cmap': cmap, 'add_colorbar': False}
     if vmin is not None:
@@ -1290,10 +1278,7 @@ def plot_variable_by_country(dataset, variable, country=None, scenario=None,
         # Apply same selections to contour data
         if country is not None and 'country_impacted' in contour_data.dims:
             contour_data = contour_data.sel(country_impacted=country)
-        
-        # Apply scenario selection ONLY if scenario dimension exists
-        if scenario is not None and 'scenario' in contour_data.dims:
-            contour_data = contour_data.sel(scenario=scenario)
+    
             
         # Convert CO2 emissions to GtCO2 if that's the contour variable
         if contour_variable == 'co2_emissions':
@@ -1301,13 +1286,13 @@ def plot_variable_by_country(dataset, variable, country=None, scenario=None,
             contour_units = 'GtCO₂'
             
             # Find the y-value (number of plants) that corresponds to target CO2 at target year
-            if 'closure_year' in contour_data.dims:
+            if 'scenario_year' in contour_data.dims:
                 # Get the data for the target year
-                year_data = contour_data.sel(closure_year=target_year)
+                year_data = contour_data.sel(scenario_year=target_year)
             elif 'year' in contour_data.dims:
                 # Get the data for the target year
                 year_data = contour_data.sel(year=target_year)
-            if 'closure_year' or 'year' in contour_data.dims:
+            if 'scenario_year' or 'year' in contour_data.dims:
                 if len(year_data) > 0:
                     # Convert to numpy array for easier manipulation
                     year_values = year_data.values
@@ -1451,7 +1436,7 @@ def plot_variable_by_country(dataset, variable, country=None, scenario=None,
     return fig, ax
 
 def plot_comparison(age_ds, mw_ds, emis_intens_ds, variable, country=None,  
-                   scenario='main', contour_variable=None, levels=10, figsize=(30, 8), 
+                  contour_variable=None, levels=10, figsize=(30, 8), 
                    target_year=2040, target_co2=10, flip_y_axis = True):
     """
     Plot three side-by-side plots comparing the same variable across different datasets.
@@ -1468,8 +1453,7 @@ def plot_comparison(age_ds, mw_ds, emis_intens_ds, variable, country=None,
         The variable to plot
     country : str or None
         Country receiving impacts to select
-    scenario : str
-        Scenario to plot
+
     contour_variable : str or None
         Optional second variable to plot as contours
     levels : int
@@ -1490,19 +1474,19 @@ def plot_comparison(age_ds, mw_ds, emis_intens_ds, variable, country=None,
     fig, axes = plt.subplots(1, 3, figsize=figsize, sharey=True)
     
     # Plot for age-sorted dataset
-    plot_variable_by_country( age_ds, variable, country, scenario, 
+    plot_variable_by_country( age_ds, variable, country, 
                            contour_variable, levels, ax=axes[0],
                            target_year=target_year, target_co2=target_co2)
     axes[0].set_title("Sorted by Age (oldest first)")
     
     # Plot for size-sorted dataset
-    plot_variable_by_country(mw_ds, variable, country, scenario, 
+    plot_variable_by_country(mw_ds, variable, country, 
                            contour_variable, levels, ax=axes[1],
                            target_year=target_year, target_co2=target_co2)
     axes[1].set_title("Sorted by Plant Size (largest first)")
     
     # Plot for emission intensity-sorted dataset
-    plot_variable_by_country(emis_intens_ds, variable, country, scenario, 
+    plot_variable_by_country(emis_intens_ds, variable, country, 
                            contour_variable, levels, ax=axes[2],
                            target_year=target_year, target_co2=target_co2)
     axes[2].set_title("Sorted by Emission Intensity (highest first)")
