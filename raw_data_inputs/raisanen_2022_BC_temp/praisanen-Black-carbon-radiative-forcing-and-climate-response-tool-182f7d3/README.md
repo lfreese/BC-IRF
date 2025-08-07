@@ -120,3 +120,17 @@ This file provides the input data for the fortran program. The input data includ
 
 An example of the output produced by the program "calculate_forcing_and_climate_response.f90". This specific example represents the radiative forcing and
 temperature response to BC emissions in the region 22-30E, 60-70N, for the year 2015 emissions employed in Räisänen et al. (2022).
+
+##### Lyssa's additions
+
+1. create all data input files (takes a netcdf file of our lats and lons and turns them into the acs format; requires a netcdf file named BC_forcing_and_climate_response_normalized_by_emissions.nc) 
+
+  python extract_lat_lon.py '
+
+2. compile the code 
+  ./compile_and_run.sh (if you haven't prepped it for compilation, first do chmod +x copmile_and_run.sh)
+
+3. run for all regions
+  ./run_all_regions.sh (again if you haven't yet, do chmod +x run_all_regions.sh first)
+
+4. combine all results into one file

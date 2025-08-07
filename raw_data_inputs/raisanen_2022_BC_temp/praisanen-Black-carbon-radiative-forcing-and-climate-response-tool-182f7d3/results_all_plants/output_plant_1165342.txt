@@ -1,0 +1,14 @@
+
+ Longitude limits:   101.4048   101.9048
+ Latitude limits:      0.7998     1.2998
+ Annual-mean BC emissions [kg m-2 s-1]:   6.7500E-16
+
+ Estimated global annual-mean radiative forcings [W m-2]
+ DRF_TOA     7.09837E-09
+ SNOWRF_TOA  1.95952E-11
+ SUM_RF_TOA  7.11797E-09
+
+ Estimated global annual-mean temperature responses [K]
+ DT_DRF      2.53910E-09
+ DT_SNOWRF   3.04159E-11
+ DT_SUM      2.56951E-09

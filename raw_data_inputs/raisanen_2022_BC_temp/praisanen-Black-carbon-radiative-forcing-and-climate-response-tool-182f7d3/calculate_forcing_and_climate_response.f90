@@ -300,6 +300,55 @@ CONTAINS
     RETURN
   END FUNCTION global_annual_mean_dt
 !****************************************************************************
+!****************************************************************************
+  FUNCTION regional_annual_mean_dt(nlon,nlat,nseas,dt, emissions, overlap_area, &
+           sec_per_season, sec_per_year, area_earth) RESULT(avg_dt)
+       
+! Compute regional annual-mean temperature response (in K)
+
+    IMPLICIT NONE
+    INTEGER, INTENT(in) :: nlon  
+    INTEGER, INTENT(in) :: nlat
+    INTEGER, INTENT(in) :: nseas ! number of seasons (ANN, DJF, MAM, JJA, SON)
+
+! regional-annual mean temperature response associated with BC emissions
+! a given region and season, in units [K (kg^{s-1})^{-1}]
+    REAL(dp), DIMENSION(nlon,nlat,nseas), INTENT(in) :: dt 
+! Seasonal-mean BC emissions in the user-defined region [kg m^{-2} s^{-1}]
+    REAL(dp), DIMENSION(nseas), INTENT(in) :: emissions
+! The overlapping part of the user-defined region with each of the predefined
+! emission regions (in m^2) 
+    REAL(dp), DIMENSION(nlon,nlat), INTENT(in) :: overlap_area
+
+! Season lengths in seconds 
+    REAL(dp), DIMENSION(nseas), INTENT(in) :: sec_per_season
+! Year length in seconds
+    REAL(dp), INTENT(in) :: sec_per_year
+! Area of earth [m^2]
+    REAL(dp), INTENT(in) :: area_earth
+
+! Local variables
+    REAL(dp) :: avg_dt, summa
+    INTEGER :: ilon, ilat, iseas
+
+! Calculate global-mean temperature response
+    summa=0.
+    DO ilon=1,nlon
+      DO ilat=1,nlat
+        DO iseas=1,nseas
+          summa = summa + overlap_area(ilon,ilat)*emissions(iseas) &
+                        * dt(ilon,ilat,iseas) * sec_per_season(iseas)
+        ENDDO
+      ENDDO
+    ENDDO
+! Normalize by the length of the year
+    avg_dt = summa / sec_per_year
+
+    RETURN
+  END FUNCTION regional_annual_mean_dt
+!****************************************************************************
+!****************************************************************************
+
   SUBROUTINE read_netcdf_data(nlon,nlat,nseas,infile, &
        longitude_west, longitude_east, latitude_south, latitude_north, &
        dirsf_toa, snowsf_toa, dt_norm_drf, dt_norm_snowrf)

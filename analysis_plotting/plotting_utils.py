@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib as mpl
+from matplotlib.lines import Line2D
 
 import cmocean.cm as cmo
 import xarray as xr
@@ -163,7 +164,12 @@ def plot_concentration_maps(conc_by_location, map_locations, shutdown_years,
             # Set map extent
             ax.set_xlim(75, 155)
             ax.set_ylim(-35, 45)
-    
+            
+            # Add subplot lettering
+            subplot_letter = chr(ord('a') + row_idx * n_locations + col_idx)
+            ax.text(0.04, 0.04, f'{subplot_letter})', transform=ax.transAxes, 
+                    fontsize=16, fontweight='bold')
+            
     # Add colorbar
     cb_ax = fig.add_axes([0.2, -0.05, 0.6, 0.02])
     mpl.colorbar.ColorbarBase(
@@ -291,6 +297,11 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
         ax.set_xlim(75, 155)
         ax.set_ylim(-35, 45)
     
+        # Add subplot lettering
+        subplot_letter = chr(ord('a') + col_idx)
+        ax.text(0.04, 0.04, f'{subplot_letter})', transform=ax.transAxes, 
+                fontsize=16, fontweight='bold')
+
     # Create normalized data plots (bottom row)
     for col_idx, location in enumerate(map_locations):
         ax = axes[1, col_idx]
@@ -335,6 +346,12 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
         # Set map extent
         ax.set_xlim(75, 155)
         ax.set_ylim(-35, 45)
+
+        # Add subplot lettering
+        subplot_letter = chr(ord('f') + col_idx)
+        ax.text(0.04, 0.04, f'{subplot_letter})', transform=ax.transAxes, 
+                fontsize=16, fontweight='bold')
+
     
     # Add row labels
     fig.text(-0.03, 0.75, f'Cumulative Concentration \n(ng/m³)', 
@@ -1080,10 +1097,10 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=(
-            "Concentration (ng/m³)", 
-            "Concentration Normalized by Emissions (ng/m³/kg/day)" if has_norm_data else None,
-            "Temperature Impact (°K)" if has_temp_data else None,
-            "Temperature Impact Normalized by Emissions (°K/kg/day)" if has_temp_norm_data else None
+            "a) Concentration (ng/m³)", 
+            "b) Concentration Normalized by Emissions (ng/m³/kg/day)" if has_norm_data else None,
+            "c) Temperature Impact (°C)" if has_temp_data else None,
+            "d) Temperature Impact Normalized by Emissions (°C/kg/day)" if has_temp_norm_data else None
         ),
         specs=[
             [{"type": "sankey"}, {"type": "sankey"}],
@@ -1946,7 +1963,7 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
         plant_data = CGP_df.loc[CGP_df['unique_ID'] == unique_id]
         
         # Get annual CO2 emissions (in GtCO2)
-        annual_co2 = float(plant_data['ANNUALCO2']) / 1e9  # Convert to GtCO2 and ensure scalar
+        annual_co2 = float(plant_data['co2emissions']) / 1e9  # Convert to GtCO2 and ensure scalar
         
         # Add to total emissions
         yr_offset = int(plant_data['Year_of_Commission'].iloc[0] - start_year)  # Ensure integer offset
@@ -2038,7 +2055,7 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
     ax1.grid(True, alpha=0.3)
     if show_lifetime_uncertainty and not breakdown_by:
         ax1.legend(loc='upper left')
-    ax1.set_title(r'CO$_2$ Emissions', fontweight='bold')
+    ax1.set_title(r'a) CO$_2$ Emissions')
 
     # Bottom-left: CO2 temperature response with both TCR and lifetime uncertainty
     ax_co2_temp = ax2
@@ -2082,7 +2099,7 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
 
     ax_co2_temp.set_xlabel('Year')
     ax_co2_temp.set_ylabel('Temperature Response (°C)')
-    ax_co2_temp.set_title(r'CO$_2$ Temperature Impact', fontweight='bold')
+    ax_co2_temp.set_title(r'b) CO$_2$ Temperature Impact')
     ax_co2_temp.grid(True, alpha=0.3)
     ax_co2_temp.legend(loc='upper left', fontsize='small')
     
@@ -2217,7 +2234,7 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
         plant_data = CGP_df.loc[CGP_df['unique_ID'] == unique_id]
         
         # Get annual values
-        annual_co2 = float(plant_data['ANNUALCO2']) / 1e9  # Convert to GtCO2
+        annual_co2 = float(plant_data['co2_emissions']) / 1e9  # Convert to GtCO2
         annual_bc = float(plant_data['BC_(g/yr)'])  # BC emissions in g/yr
         
         # Get ARTP temperature responses
@@ -2319,16 +2336,10 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
         min_cumulative_bc = np.cumsum(min_bc_emissions)
         max_cumulative_bc = np.cumsum(max_bc_emissions)
         
-        # Calculate cumulative ARTP temperature impacts with lifetime uncertainty
-        min_cumulative_global_10 = np.cumsum(min_global_10)
-        max_cumulative_global_10 = np.cumsum(max_global_10)
+        # Calculate cumulative ARTP temperature impacts
         min_cumulative_global_20 = np.cumsum(min_global_20)
         max_cumulative_global_20 = np.cumsum(max_global_20)
-        min_cumulative_global_50 = np.cumsum(min_global_50)
-        max_cumulative_global_50 = np.cumsum(max_global_50)
-        min_cumulative_global_100 = np.cumsum(min_global_100)
-        max_cumulative_global_100 = np.cumsum(max_global_100)
-    
+
     # Calculate temperature responses
     co2_temp_response = cumulative_emissions * (tcr / 1000)
     co2_temp_upper = cumulative_emissions * ((tcr + tcr_uncertainty) / 1000)
@@ -2336,9 +2347,6 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
     
     # Total temperature response (CO2 + BC)
     total_temp_response = co2_temp_response + cumulative_global_20
-    if show_lifetime_uncertainty:
-        total_temp_upper = co2_temp_upper + max_cumulative_global_20
-        total_temp_lower = co2_temp_lower + min_cumulative_global_20
 
     # Create the 2x2 plot layout
     fig, axs = plt.subplots(2, 2, figsize=figsize, sharex=True)
@@ -2380,7 +2388,7 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
                 color='tab:blue', linewidth=2, label='Cumulative CO2 Emissions')
     
     ax_co2_emissions.set_ylabel('Cumulative CO2 Emissions (GtCO2)')
-    ax_co2_emissions.set_title(r'CO$_2$ Emissions', fontweight='bold')
+    ax_co2_emissions.set_title(r'a) CO$_2$ Emissions')
     ax_co2_emissions.grid(True, alpha=0.3)
     if show_lifetime_uncertainty and not breakdown_by:
         ax_co2_emissions.legend(loc='upper left', fontsize='small')
@@ -2425,7 +2433,7 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
 
     ax_co2_temp.set_xlabel('Year')
     ax_co2_temp.set_ylabel('Temperature Response (°C)')
-    ax_co2_temp.set_title(r'CO$_2$ Temperature Impact', fontweight='bold')
+    ax_co2_temp.set_title(r'c) CO$_2$ Temperature Impact')
     ax_co2_temp.grid(True, alpha=0.3)
     ax_co2_temp.legend(loc='upper left', fontsize='small')
     
@@ -2470,7 +2478,7 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
     ax_bc_emissions.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
     
     ax_bc_emissions.set_ylabel('Cumulative Black Carbon Emissions (g)')
-    ax_bc_emissions.set_title('Black Carbon Emissions', fontweight='bold')
+    ax_bc_emissions.set_title('b) Black Carbon Emissions')
     ax_bc_emissions.grid(True, alpha=0.3)
     if show_lifetime_uncertainty and not breakdown_by:
         ax_bc_emissions.legend(loc='upper left', fontsize='small')
@@ -2505,10 +2513,12 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
     
     ax_bc_temp.set_xlabel('Year')
     ax_bc_temp.set_ylabel('Cumulative Temperature Response (°C)')
-    ax_bc_temp.set_title('BC Temperature Impact (ARTP)', fontweight='bold')
+    ax_bc_temp.set_title('d) BC Temperature Impact')
     ax_bc_temp.grid(True, alpha=0.3)
     ax_bc_temp.legend(loc='upper left', fontsize='small')
     
+    for ax in [ax_co2_emissions, ax_co2_temp, ax_bc_emissions, ax_bc_temp]: 
+        ax.set_xlim(start_year, end_year)
     
     # Adjust layout
     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Make room for the suptitle
@@ -2624,7 +2634,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
         plant_data = CGP_df.loc[CGP_df['unique_ID'] == unique_id]
         
         # Get annual values
-        annual_co2 = float(plant_data['ANNUALCO2']) / 1e9  # Convert to GtCO2
+        annual_co2 = float(plant_data['co2_emissions']) / 1e9  # Convert to GtCO2
         annual_bc = float(plant_data['BC_(g/yr)'])  # BC emissions in g/yr
         annual_dt_drf = float(plant_data['dt_drf'])
         annual_dt_snowrf = float(plant_data['dt_snowrf'])
@@ -2753,7 +2763,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
                 color='tab:blue', linewidth=2, label='Cumulative CO2 Emissions')
     
     ax_co2_emissions.set_ylabel('Cumulative CO2 Emissions (GtCO2)')
-    ax_co2_emissions.set_title(r'CO$_2$ Emissions', fontweight='bold')
+    ax_co2_emissions.set_title(r'a) CO$_2$ Emissions')
     ax_co2_emissions.grid(True, alpha=0.3)
     if show_lifetime_uncertainty and not breakdown_by:
         ax_co2_emissions.legend(loc='upper left', fontsize='small')
@@ -2805,7 +2815,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
     
     ax_co2_temp.set_xlabel('Year')
     ax_co2_temp.set_ylabel('Temperature Response (°C)')
-    ax_co2_temp.set_title(r'CO$_2$ Temperature Impact', fontweight='bold')
+    ax_co2_temp.set_title(r'c) CO$_2$ Temperature Impact')
     ax_co2_temp.grid(True, alpha=0.3)
     ax_co2_temp.legend(loc='upper left', fontsize='small')
     
@@ -2850,7 +2860,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
     ax_bc_emissions.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
     
     ax_bc_emissions.set_ylabel('Cumulative Black Carbon Emissions (g)')
-    ax_bc_emissions.set_title('Black Carbon Emissions', fontweight='bold')
+    ax_bc_emissions.set_title('b) Black Carbon Emissions')
     ax_bc_emissions.grid(True, alpha=0.3)
     if show_lifetime_uncertainty and not breakdown_by:
         ax_bc_emissions.legend(loc='upper left', fontsize='small')
@@ -2892,7 +2902,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
     
     ax_bc_temp.set_xlabel('Year')
     ax_bc_temp.set_ylabel('Cumulative Temperature Response (°C)')
-    ax_bc_temp.set_title('BC Temperature Impact', fontweight='bold')
+    ax_bc_temp.set_title('d) BC Temperature Impact')
     ax_bc_temp.grid(True, alpha=0.3)
     ax_bc_temp.legend(loc='upper left', fontsize='small')
 
@@ -3051,7 +3061,7 @@ def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=203
         plant_data = CGP_df.loc[CGP_df['unique_ID'] == unique_id]
         
         # Get annual values
-        annual_co2 = float(plant_data['ANNUALCO2']) / 1e9  # Convert to GtCO2
+        annual_co2 = float(plant_data['co2_emissions']) / 1e9  # Convert to GtCO2
         annual_bc = float(plant_data['BC_(g/yr)'])  # BC emissions in g/yr
         annual_dt_drf = float(plant_data['dt_drf'])
         annual_dt_snowrf = float(plant_data['dt_snowrf'])
@@ -3479,17 +3489,17 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
     strategy_names = {
         'Year_of_Commission': 'Oldest First',
         'MW': 'Largest First', 
-        'CO2_weighted_capacity_1000tonsperMW': 'Most Polluting First'
+        'EMISFACTOR.CO2': 'Most Polluting First'
     }
     
     strategy_styles = {
         'Year_of_Commission': {'linestyle': '-'},
         'MW': {'linestyle': '--'}, 
-        'CO2_weighted_capacity_1000tonsperMW': {'linestyle': ':'}
+        'EMISFACTOR.CO2': {'linestyle': ':'}
     }
     
     # Create colormap for rates
-    colors = plt.cm.Dark2(np.linspace(0, 1, len(rates)))
+    colors = plt.cm.Paired(np.linspace(0, 1, len(rates)))
     
     # Dictionary to store CO2 data
     co2_data = {}
@@ -3500,8 +3510,8 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
     # Get total number of plants
     total_plants = len(vietnam_ds.unique_ID)
     
-    # Define timeline from 2020 to force_closure_by
-    timeline = np.arange(2020, force_closure_by + 1)
+    # Define timeline from 2025 to force_closure_by
+    timeline = np.arange(2025, force_closure_by + 1)
     
     # For each strategy
     for s_idx, strategy in enumerate(strategies):
@@ -3529,10 +3539,20 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
             capacity[0] = sorted_ds['MW'].sum().values / 1000  # Convert to GW
             
             # Get BC concentration for the impacted country
-            if impacted_country in scenario_ds.country_impacted.values:
-                bc_data = sorted_ds.sel(country_impacted=impacted_country)[impact_var]
-                bc_conc[0] = bc_data.sum().values
+            # Handle impacted_country parameter - convert string to list for consistent processing
+            if isinstance(impacted_country, str):
+                impacted_countries = [impacted_country]
+            else:
+                impacted_countries = list(impacted_country)
             
+            # Get BC concentration for the impacted country/countries
+            bc_conc[0] = 0  # Initialize
+            for imp_country in impacted_countries:
+                if imp_country in scenario_ds.country_impacted.values:
+                    bc_data = sorted_ds.sel(country_impacted=imp_country)[impact_var]
+                    bc_conc[0] += bc_data.sum().values
+
+  
             # Get CO2 emissions
             co2_emis[0] = sorted_ds['co2_emissions'].sum().values / 1e6  # Convert to million tons
             cumulative_co2[0] = co2_emis[0]
@@ -3561,11 +3581,12 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
                 capacity[i] = remaining_ds['MW'].sum().values / 1000 if plants_left > 0 else 0
                 
                 # Calculate remaining BC concentration
-                if impacted_country in scenario_ds.country_impacted.values and plants_left > 0:
-                    bc_data = remaining_ds.sel(country_impacted=impacted_country)[impact_var]
-                    bc_conc[i] = bc_data.sum().values
-                else:
-                    bc_conc[i] = 0
+                bc_conc[i] = 0  # Initialize
+                if plants_left > 0:
+                    for imp_country in impacted_countries:
+                        if imp_country in scenario_ds.country_impacted.values:
+                            bc_data = remaining_ds.sel(country_impacted=imp_country)[impact_var]
+                            bc_conc[i] += bc_data.sum().values
                 
                 # Calculate remaining CO2 emissions
                 co2_emis[i] = remaining_ds['co2_emissions'].sum().values / 1e6 if plants_left > 0 else 0
@@ -3601,10 +3622,7 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
             
             # Plot cumulative CO2 (bottom row)
             axs[2].plot(timeline, cumulative_co2, color=color, linestyle=line_style, linewidth=2)
-    
-    # Add titles and labels
-    axs[0].set_title(f'Comparison of {country} Power Plant Retirement Strategies (forced closure by {force_closure_by}) in {impacted_country}') 
-    
+ 
     # Add grid to all plots
     for row in range(3):
         axs[row].grid(True, linestyle='--', alpha=0.5)
@@ -3613,10 +3631,7 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
     axs[1].set_ylabel(f'BC Concentration in\n{impacted_country} (ng/m³)')
     axs[2].set_ylabel('Cumulative CO₂ (Mt)')
     axs[2].set_xlabel('Year')
-    
-    # Create custom legend for rates and strategies
-    from matplotlib.lines import Line2D
-    
+
     # Create legend elements for rates (colors)
     rate_legend_elements = [Line2D([0], [0], color=colors[i], lw=2, 
                                   label=f"{rate:.1f} plants/year")
@@ -3629,8 +3644,369 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
                                for s in strategies]
     
     # Add both legends
-    axs[0].legend(handles=rate_legend_elements, loc='upper left', title="Retirement Rate")
-    axs[1].legend(handles=strategy_legend_elements, loc='upper right', title="Strategy")
+    fig.legend(handles=rate_legend_elements, loc='upper right', title="Retirement Rate", bbox_to_anchor=(1.1, 0.5),)
+    fig.legend(handles=strategy_legend_elements, loc='upper right', title="Strategy", bbox_to_anchor=(1.11, 0.28),)
     
     plt.tight_layout()
     return fig, axs, co2_data
+
+
+def compare_multi_country_strategies_and_rates(scenario_ds, countries=['MALAYSIA', 'INDONESIA', 'VIETNAM'],
+                                              rates=[1.0, 2.0, 4.0], 
+                                              force_closure_by={'MALAYSIA': 2045, 'CAMBODIA': 2050, 'INDONESIA': 2040, 'VIETNAM': 2050},
+                                              strategies=['Year_of_Commission', 'MW', 'CO2_weighted_capacity_1000tonsperMW'],
+                                              impact_var='BC_pop_weight_mean_conc',
+                                              impacted_country='China',
+                                              figsize=(20, 12)):
+    """
+    Compare different retirement strategies and rates for multiple countries side by side in a 3x3 grid.
+    Each column represents a country, and each row represents a different metric.
+    
+    Parameters:
+    -----------
+    scenario_ds : xarray.Dataset
+        Dataset containing power plant data
+    countries : list
+        List of countries to compare (default: ['MALAYSIA', 'INDONESIA', 'VIETNAM'])
+    rates : list or dict
+        Retirement rates to compare. Can be:
+        - List: Same rates for all countries (e.g., [1.0, 2.0, 4.0])
+        - Dict: Country-specific rates (e.g., {'MALAYSIA': [1.0, 2.0], 'INDONESIA': [2.0, 4.0], 'VIETNAM': [1.0, 3.0]})
+    force_closure_by : dict
+        Year by which all plants must be closed, regardless of rate, dictionary
+    strategies : list
+        List of strategies to compare (e.g., 'Year_of_Commission', 'MW')
+    impact_var : str
+        Variable to analyze (e.g., 'BC_pop_weight_mean_conc', 'co2_emissions')
+    impacted_country : str or list
+        Country/countries receiving impacts to analyze. If a list is provided, impacts will be summed across all countries.
+    figsize : tuple
+        Figure size for the plot
+        
+    Returns:
+    --------
+    fig : matplotlib.figure.Figure
+        Figure containing the comparison plots
+    axs : numpy.ndarray
+        2D array of axes (3 rows x 3 columns)
+    country_data : dict
+        Dictionary containing data for each country, strategy, and rate
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    
+    # Handle rates parameter - convert to dictionary format for consistent processing
+    if isinstance(rates, dict):
+        country_rates = rates
+        # Get all unique rates across countries for color mapping
+        all_rates = []
+        for country_rate_list in country_rates.values():
+            all_rates.extend(country_rate_list)
+        unique_rates = all_rates #sorted(list((all_rates)))
+    else:
+        # If rates is a list, apply same rates to all countries
+        country_rates = {country: rates for country in countries}
+        unique_rates = sorted(rates)
+    print(unique_rates)
+    # Handle impacted_country parameter - convert string to list for consistent processing
+    if isinstance(impacted_country, str):
+        impacted_countries = [impacted_country]
+    else:
+        impacted_countries = list(impacted_country)
+    
+    # Create figure with 3 rows (capacity, BC concentration, cumulative CO2) and 3 columns (countries)
+    # Don't share x-axis since countries have different timelines
+    fig, axs = plt.subplots(3, len(countries), figsize=figsize)#, sharey='row')
+    
+    # Strategy names and styles
+    strategy_names = {
+        'Year_of_Commission': 'Oldest First',
+        'MW': 'Largest First', 
+        'EMISFACTOR.CO2': r'Highest CO$_2$ Intensity First'
+    }
+    
+    strategy_styles = {
+        'Year_of_Commission': {'linestyle': '-'},
+        'MW': {'linestyle': '--'}, 
+        'EMISFACTOR.CO2': {'linestyle': ':'}
+    }
+    
+    # Create colormap for rates based on unique rates across all countries
+    #colors = plt.cm.tab10(np.linspace(0, 1, len(unique_rates)))
+    colors = [
+         "#007336",   # Dark Teal Blue
+    '#E66F20',   # Rust Orange
+    "#7CC8FF",    # Pale Yellow
+    '#0F8B8D',   # Dark Teal
+    '#E07C10',   # Burnt Orange
+    "#52B0FD",   # Deep Yellow
+    "#0B7F73",   # Aqua
+    '#D85E0D',   # Dark Orange
+    "#179DFC",   # Mustard Yellow
+]
+    # Create rate-to-color mapping
+    # Dictionary to store all data
+    country_data = {}
+    rate_color_map = {}
+    timeline = {}
+    # Process each country
+    mult_val = 0
+    names_dict = {0: 'Ambitious', 1: 'On-time', 2: 'Slow'}
+    for col_idx, country in enumerate(countries):
+        
+        rate_color_map[country] = {rate: colors[i+mult_val*3] for i, rate in enumerate(rates[country])}
+
+        # Define timeline from 2025 to force_closure_by
+        timeline[country] = np.arange(2025, force_closure_by[country] + 1)
+
+        # Initialize country data dictionary
+        country_data[country] = {}
+        
+        # Get the country dataset
+        country_ds = scenario_ds.where(scenario_ds.country_emitting == country, drop=True)
+        
+        # Get total number of plants for this country
+        total_plants = len(country_ds.unique_ID)
+        
+        # For each strategy
+        for s_idx, strategy in enumerate(strategies):
+            # Create dict to store data for this strategy
+            country_data[country][strategy] = {}
+            
+            # Sort plants by strategy
+            if strategy == 'Year_of_Commission':
+                sorted_ds = country_ds.sortby(strategy)  # oldest first
+                if sorted_ds[strategy][0] >= sorted_ds[strategy][1]:
+                    print(f"Warning: not in ascending age order for {country} with strategy {strategy}")
+            else:
+                sorted_ds = country_ds.sortby(strategy, ascending=False)  # Biggest first
+                if sorted_ds[strategy][0] < sorted_ds[strategy][1]:
+                    print(f"Warning: not in descending order for {country} with strategy {strategy}")
+            # Generate trajectories for different retirement rates for this country
+            for r_idx, rate in enumerate(country_rates[country]):
+                # Calculate how many years it takes to retire all plants at this rate
+                years_to_retire = int(np.ceil(total_plants / rate))
+                
+                # Track capacity, BC concentration, and CO2 emissions over time
+                capacity = np.zeros(len(timeline[country]))
+                bc_conc = np.zeros(len(timeline[country]))
+                co2_emis = np.zeros(len(timeline[country]))
+                cumulative_co2 = np.zeros(len(timeline[country]))
+                
+                # Initialize with all plants operating
+                capacity[0] = sorted_ds['MW'].sum().values / 1000  # Convert to GW
+
+                # Get BC concentration for the impacted country/countries
+                bc_conc[0] = 0  # Initialize
+                for imp_country in impacted_countries:
+                    if imp_country in scenario_ds.country_impacted.values:
+                        bc_data = sorted_ds.sel(country_impacted=imp_country)[impact_var]
+                        bc_conc[0] += bc_data.sum().values
+
+                # Get CO2 emissions
+                co2_emis[0] = sorted_ds['co2_emissions'].sum().values / 1e6  # Convert to million tons
+                cumulative_co2[0] = co2_emis[0]
+                
+                # Simulate retirement over time
+                plants_left = total_plants
+                
+                for i, year in enumerate(timeline[country][1:], 1):
+                    # Calculate years until forced closure
+                    years_until_force_closure = force_closure_by[country] - year
+
+                    # If we're approaching the force_closure_by year, calculate plants that must be retired
+                    if years_until_force_closure > 0:
+                        plants_to_retire_this_year = min(rate, plants_left)
+                    else:
+                        # Force all remaining plants to close in the final year
+                        plants_to_retire_this_year = plants_left
+                    
+                    # Retire plants
+                    plants_left -= plants_to_retire_this_year
+                    
+                    # Get remaining plants
+                    remaining_ds = sorted_ds.isel(unique_ID=slice(int(total_plants - plants_left), total_plants))
+                    
+                    # Calculate remaining capacity
+                    capacity[i] = remaining_ds['MW'].sum().values / 1000 if plants_left > 0 else 0
+                    
+                    # Calculate remaining BC concentration
+                    bc_conc[i] = 0  # Initialize
+                    if plants_left > 0:
+                        for imp_country in impacted_countries:
+                            if imp_country in scenario_ds.country_impacted.values:
+                                bc_data = remaining_ds.sel(country_impacted=imp_country)[impact_var]
+                                bc_conc[i] += bc_data.sum().values
+                    
+                    # Calculate remaining CO2 emissions
+                    co2_emis[i] = remaining_ds['co2_emissions'].sum().values / 1e6 if plants_left > 0 else 0
+                    
+                    # Calculate cumulative CO2 emissions
+                    cumulative_co2[i] = cumulative_co2[i-1] + co2_emis[i]
+                
+                # Extend timeline and values to 2050 if country timeline ends before 2050
+                extended_timeline = timeline[country].copy()
+                extended_co2_emis = co2_emis.copy()
+                extended_cumulative_co2 = cumulative_co2.copy()
+                extended_bc_conc = bc_conc.copy()
+                extended_capacity = capacity.copy()
+                
+                if timeline[country][-1] < 2050:
+                    # Create extended timeline to 2050
+                    years_to_add = np.arange(timeline[country][-1] + 1, 2051)
+                    extended_timeline = np.concatenate([timeline[country], years_to_add])
+                    
+                    # Extend arrays with final values
+                    final_co2_emis = 0  # No new emissions after retirement
+                    final_cumulative_co2 = cumulative_co2[-1]  # Maintain final cumulative value
+                    final_bc_conc = 0  # No concentration after retirement
+                    final_capacity = 0  # No capacity after retirement
+                    
+                    # Add zeros for annual emissions and concentration, maintain cumulative CO2
+                    extended_co2_emis = np.concatenate([co2_emis, np.full(len(years_to_add), final_co2_emis)])
+                    extended_cumulative_co2 = np.concatenate([cumulative_co2, np.full(len(years_to_add), final_cumulative_co2)])
+                    extended_bc_conc = np.concatenate([bc_conc, np.full(len(years_to_add), final_bc_conc)])
+                    extended_capacity = np.concatenate([capacity, np.full(len(years_to_add), final_capacity)])
+                
+                # Store data
+                country_data[country][strategy][rate] = {
+                    'years': extended_timeline,
+                    'co2_emissions': extended_co2_emis,
+                    'cumulative_co2': extended_cumulative_co2,
+                    'bc_concentration': extended_bc_conc,
+                    'capacity': extended_capacity
+                }
+                
+                # Use extended timeline for plotting
+                extended_timeline = country_data[country][strategy][rate]['years']
+                extended_co2_emis = country_data[country][strategy][rate]['co2_emissions']
+                extended_cumulative_co2 = country_data[country][strategy][rate]['cumulative_co2']
+                extended_bc_conc = country_data[country][strategy][rate]['bc_concentration']
+                extended_capacity = country_data[country][strategy][rate]['capacity']
+                
+                # Combine strategy style with rate color
+                line_style = strategy_styles[strategy]['linestyle']
+                color = rate_color_map[country][rate]  # Use the rate-color mapping
+                
+                # Construct label - only add labels for first column 
+                if col_idx == 0 and s_idx == 0:
+                    label = f"{names_dict[r_idx]}: {rate:.1f} plants/year"
+                elif col_idx == 0 and r_idx == 0:
+                    label = f"{strategy_names[strategy]}"
+                else:
+                    label = None
+                
+                # Plot capacity (row 0)
+                axs[0, col_idx].plot(extended_timeline, extended_capacity, color=color, linestyle=line_style, 
+                                   label=label, linewidth=2)
+                
+                # Plot BC concentration (row 1)
+                axs[1, col_idx].plot(extended_timeline, extended_bc_conc, color=color, linestyle=line_style, linewidth=2)
+                
+                # Plot cumulative CO2 (row 2)
+                axs[2, col_idx].plot(extended_timeline, extended_cumulative_co2, color=color, linestyle=line_style, linewidth=2)
+        mult_val +=1
+    # Set column titles (country names)
+    for col_idx, country in enumerate(countries):
+        axs[0, col_idx].set_title(f'{country.title()}', fontsize=16)
+    
+    # Set row labels (only for first column)
+    axs[0, 0].set_ylabel('Capacity (GW)', fontsize=14)
+    axs[1, 0].set_ylabel(f'Population weighted mean\nBlack Carbon Concentration\n(ng/m³/person)', fontsize=14)
+    axs[2, 0].set_ylabel('Cumulative CO₂ (Mt)', fontsize=14)
+    
+    # Set x-axis labels and ticks (only for bottom row)
+    for col_idx in range(len(countries)):
+        axs[2, col_idx].set_xlabel('Year', fontsize=14)
+        
+        # Set x-ticks every 5 years from 2025 to 2050 for bottom row only
+        x_ticks = np.arange(2025, 2051, 5)  # 2025, 2030, 2035, 2040, 2045, 2050
+        axs[2, col_idx].set_xticks(x_ticks)
+    
+    # Remove x-ticks from top and middle rows
+    for row in range(2):  # Only rows 0 and 1 (not bottom row)
+        for col in range(len(countries)):
+            axs[row, col].set_xticks([])
+    
+    # Add grid to all plots
+    for row in range(3):
+        for col in range(len(countries)):
+            axs[row, col].grid(True, linestyle='--', alpha=0.5)
+            
+            # Add subplot lettering
+            subplot_letter = chr(ord('a') + row * len(countries) + col)
+            axs[row, col].text(0.04, 0.93, f'{subplot_letter})', transform=axs[row, col].transAxes, 
+                              fontsize=14, fontweight='bold')
+    
+    # Set the x limits
+    for row in range(3):
+        for col, country in enumerate(countries):
+            axs[row, col].set_xlim([2024, 2050])  
+            axs[row, col].set_ylim(bottom=0, top =axs[row, col].get_ylim()[1]*1.06)  
+    
+    # Create legends based on whether rates is a dictionary or list
+    if isinstance(rates, dict):
+        # Create separate legends for each country showing only their specific rates
+        for col, country in enumerate(countries):
+            country_rates_list = country_rates[country]
+            country_rate_legend_elements = [Line2D([0], [0], color=rate_color_map[country][rate], lw=2, 
+                                                  label=f"{names_dict[idx]}: {rate:.0f} plants/year" if rate >= 1 else f"{names_dict[idx]}: {rate:.1f} plants/year")
+                                           for idx, rate in enumerate(country_rates_list)]
+            
+            # Add rate legend underneath each country's bottom subplot
+            axs[2, col].legend(handles=country_rate_legend_elements, 
+                              loc='upper center', 
+                              bbox_to_anchor=(0.5, -0.15),
+                              title=f"Closure Rate",
+                              fontsize=12,
+                              frameon=True,
+                              ncol=min(len(country_rates_list), 1))  # Max 3 columns
+        
+        # Create strategy legend on the right side
+        strategy_legend_elements = [Line2D([0], [0], color='black', lw=2, 
+                                          linestyle=strategy_styles[s]['linestyle'],
+                                          label=strategy_names[s])
+                                   for s in strategies]
+        
+        fig.legend(handles=strategy_legend_elements, 
+                  loc='center right',
+                  bbox_to_anchor=(1.03, 0.5),
+                  title="Strategies",
+                  fontsize=14,
+                  frameon=True)
+        
+        # Adjust layout to make room for the legends
+        plt.tight_layout()
+        plt.subplots_adjust(right=0.85, bottom=0.15)  # Make room for legends
+        
+    else:
+        # Create combined legend elements
+        # Rates (colors)
+        rate_legend_elements = [Line2D([0], [0], color=rate_color_map[country][rate], lw=2, 
+                                      label=f"{rate:.1f} plants/year")
+                               for rate in unique_rates]
+        
+        # Strategies (line styles)
+        strategy_legend_elements = [Line2D([0], [0], color='black', lw=2, 
+                                          linestyle=strategy_styles[s]['linestyle'],
+                                          label=strategy_names[s])
+                                   for s in strategies]
+        
+        # Combine all legend elements
+        all_legend_elements = rate_legend_elements + strategy_legend_elements
+        all_legend_labels = [elem.get_label() for elem in all_legend_elements]
+        
+        # Create a single legend to the right of the plots
+        fig.legend(handles=all_legend_elements, 
+                  labels=all_legend_labels,
+                  loc='center right',
+                  bbox_to_anchor=(0.99, 0.5),
+                  fontsize=14,
+                  frameon=True)
+        
+        # Adjust layout to make room for the legend
+        plt.tight_layout()
+        plt.subplots_adjust(right=0.85)  # Make room for the legend on the right
+
+    return fig, axs, country_data
