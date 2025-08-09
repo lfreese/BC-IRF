@@ -51,22 +51,40 @@ def prepare_concentration_data(full_ds, gdf, map_locations, shutdown_years,
                        .where(full_ds.country_emitting == loc, drop=True)
                        .sel(scenario_year=yr)[variable]
                        .sum(dim='unique_ID'))
-            
+
+            if normalize:
+                if loc == 'all':
+                    norm_factor = (full_ds['BC_(g/yr)']
+                                    .sum(dim = 'unique_ID').sel(scenario_year = yr))
+                else:
+                    norm_factor = (full_ds.where(full_ds.country_emitting == loc, drop = True)['BC_(g/yr)']
+                                    .sum(dim = 'unique_ID').sel(scenario_year = yr))
+                #print(data)
+                #print(norm_factor)
+                data = data / norm_factor.values   
+
+            if hasattr(data, 'ndim') and data.ndim == 0:
+                data_prep = gdf.copy()
+                data_prep[variable] = data.values
+                data = data_prep.drop(columns = ['geometry'])
+            else:
+                data = data.to_dataframe()
+
             # Create GeoDataFrame
             gdf_data = pd.merge(
                 gdf, 
-                data.to_dataframe(), 
+                data, 
                 on='country_impacted'
             )
             
-            # Normalize if requested
-            if normalize:
-                if loc == 'all':
-                    total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'].sum() 
-                else:
-                    total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'][loc]
+            # # Normalize if requested
+            # if normalize:
+            #     if loc == 'all':
+            #         total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'].sum() 
+            #     else:
+            #         total_emissions = emissions_df.groupby('COUNTRY').sum()['BC_(g/yr)'][loc]
                 
-                gdf_data[variable] = gdf_data[variable] / total_emissions
+            #     gdf_data[variable] = gdf_data[variable] / total_emissions
             
             conc_by_location[loc][yr] = gdf_data
     
@@ -1063,6 +1081,7 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
 #     )
     
 #     return fig
+
 def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, temp_norm_data=None,
                               year=2040, location='all', 
                               variable='BC_pop_weight_mean_conc', temp_variable='temperature_impact_aamaas_10',
@@ -1118,10 +1137,68 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
         (temp_norm_data, temp_variable, 2, 2)  # normalized temperature data, bottom-right
     ]
     
+    # Dictionary to store all the Sankey data
+    sankey_data = {}
+
+    # Calculate top_receptors combining BC and temperature data
+    top_receptors = set()
+    
+    # Get top receptors from regular BC data
+    try:
+        bc_data_df = regular_data[location][year].copy()
+        if isinstance(bc_data_df, pd.DataFrame):
+            bc_grouped_df = bc_data_df.groupby(bc_data_df.index)[variable].sum().reset_index()
+            bc_grouped_df.columns = ['country_impacted', variable]
+        else:
+            bc_grouped_df = bc_data_df.reset_index()
+            bc_grouped_df = bc_grouped_df.groupby('country_impacted')[variable].sum().reset_index()
+        
+        bc_grouped_df = bc_grouped_df.dropna(subset=[variable])
+        if not bc_grouped_df.empty:
+            top_receptors_bc = bc_grouped_df.sort_values(variable, ascending=False).head(top_n)
+            top_receptors.update(top_receptors_bc['country_impacted'].tolist())
+    except (KeyError, Exception) as e:
+        print(f"Could not get BC top receptors: {e}")
+    
+    # Get top receptors from temperature data
+    if temp_data is not None and location in temp_data:
+        try:
+            temp_data_df = temp_data[location][year].copy()
+            if isinstance(temp_data_df, pd.DataFrame):
+                temp_grouped_df = temp_data_df.groupby(temp_data_df.index)[temp_variable].sum().reset_index()
+                temp_grouped_df.columns = ['country_impacted', temp_variable]
+            else:
+                temp_grouped_df = temp_data_df.reset_index()
+                temp_grouped_df = temp_grouped_df.groupby('country_impacted')[temp_variable].sum().reset_index()
+            
+            temp_grouped_df = temp_grouped_df.dropna(subset=[temp_variable])
+            if not temp_grouped_df.empty:
+                top_receptors_temp = temp_grouped_df.sort_values(temp_variable, ascending=False).head(top_n)
+                top_receptors.update(top_receptors_temp['country_impacted'].tolist())
+        except (KeyError, Exception) as e:
+            print(f"Could not get temperature top receptors: {e}")
+    
+    print(f"Combined top receptors: {top_receptors}")
+    top_receptors = list(top_receptors)
     for data_idx, (data_dict, viz_variable, idx_row, idx_col) in enumerate(datasets):
         # Skip if data is not provided or location not in data
         if data_dict is None or location not in data_dict:
             continue
+        
+        # Create a key for this dataset
+        if data_dict is regular_data:
+            if viz_variable == variable:
+                data_key = 'regular_concentration'
+            else:
+                data_key = 'regular_temperature'
+        elif data_dict is norm_data:
+            data_key = 'normalized_concentration'
+        elif data_dict is temp_data:
+            data_key = 'temperature'
+        elif data_dict is temp_norm_data:
+            data_key = 'normalized_temperature'
+        else:
+            data_key = f'dataset_{data_idx}'
         
         try:
             # Get data for the specified year and location
@@ -1135,7 +1212,6 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
                 # If it's already in the right format, just ensure we have the right columns
                 grouped_df = data_df.reset_index()
                 grouped_df = grouped_df.groupby('country_impacted')[viz_variable].sum().reset_index()
-            
         except KeyError:
             print(f"Year {year} not found in data for row {idx_row}, col {idx_col}. Available: {list(data_dict[location].keys())}")
             continue
@@ -1147,11 +1223,10 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
             print(f"No data for {location} in {year} for variable {viz_variable}")
             continue
         
-        # Sort by impact and get top receptors
-        top_receptors = grouped_df.sort_values(viz_variable, ascending=False).head(top_n)
-        
+
         # For 'all', we need to split by source country
         if location == 'all':
+
             # Get source countries from the map_locations list
             source_countries = ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']
             
@@ -1160,26 +1235,35 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
             for country in source_countries:
                 if country in data_dict:
                     country_data = data_dict[country][year].copy()
-                    
+                    # Check if this is a temperature/radiative forcing variable
+                    is_temperature_var = any(temp_keyword in viz_variable.lower() 
+                                            for temp_keyword in ['drf_toa', 'snowrf_toa', 'sum_rf_toa', 
+                                                            'dt_drf', 'dt_snowrf', 'dt_sum', 'temperature'])
                     # Group by country_impacted and sum
                     if isinstance(country_data, pd.DataFrame):
-                        country_grouped = country_data.groupby(country_data.index)[viz_variable].sum().reset_index()
-                        country_grouped.columns = ['country_impacted', viz_variable]
+                        if is_temperature_var: ## temperature impact is just the mean value for each country rather than summing across shapes (using global mean value)
+                            country_grouped = country_data.groupby(country_data.index)[viz_variable].mean().reset_index()
+                            country_grouped.columns = ['country_impacted', viz_variable]
+                        else: ## black carbon data is summed across multiple geo shapes for a country
+                            country_grouped = country_data.groupby(country_data.index)[viz_variable].sum().reset_index()
+                            country_grouped.columns = ['country_impacted', viz_variable]
                     else:
-                        country_grouped = country_data.reset_index()
-                        country_grouped = country_grouped.groupby('country_impacted')[viz_variable].sum().reset_index()
-                    
+                        if isinstance(country_data, pd.DataFrame):
+                            country_grouped = country_data.reset_index()
+                            country_grouped = country_grouped.groupby('country_impacted')[viz_variable].mean().reset_index()
+                        else:
+                            country_grouped = country_data.reset_index()
+                            country_grouped = country_grouped.groupby('country_impacted')[viz_variable].sum().reset_index()
                     # Filter to include top receptor countries and source countries if needed
-                    target_list = top_receptors['country_impacted'].tolist()
+                    target_list = top_receptors
                     if not allow_loops:
                         # Add source countries as potential targets
                         target_list += [c.capitalize() for c in source_countries]
-                    
                     country_grouped = country_grouped[country_grouped['country_impacted'].isin(target_list)]
                     
                     if not country_grouped.empty:
                         country_dfs[country] = country_grouped
-            
+                    
             # Prepare data for the Sankey diagram
             all_sources = []
             all_targets = []
@@ -1195,6 +1279,7 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
             for _, df in country_dfs.items():
                 for receptor in df['country_impacted'].unique():
                     if receptor not in target_nodes:
+                        print(receptor)
                         target_nodes.append(receptor)
             
             # Create a mapping for nodes that would cause self-loops
@@ -1318,6 +1403,34 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
                     node_colors.append(source_colors[country])
                 else:
                     node_colors.append("gray")
+            
+            # Store the data for this Sankey diagram
+            sankey_data[data_key] = {
+                'nodes': {
+                    'labels': node_labels,
+                    'colors': node_colors,
+                    'values': node_values,
+                    'all_nodes': all_nodes
+                },
+                'links': {
+                    'source': all_sources,
+                    'target': all_targets,
+                    'value': all_values,
+                    'labels': all_labels,
+                    'colors': all_colors
+                },
+                'raw_data': {
+                    'country_dfs': country_dfs,
+                    'top_receptors': top_receptors,
+                    'source_countries': source_countries
+                },
+                'metadata': {
+                    'year': year,
+                    'location': location,
+                    'variable': viz_variable,
+                    'top_n': top_n
+                }
+            }
                     
             # Create Sankey diagram with labels included
             sankey = go.Sankey(
@@ -1355,7 +1468,8 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
         margin=dict(l=50, r=50, b=25, t=50),
     )
     
-    return fig
+    return fig, sankey_data
+
 
 def create_multi_source_sankey(regular_data, year=2040, variable='BC_pop_weight_mean_conc', top_n=10):
     """
@@ -1963,7 +2077,7 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
         plant_data = CGP_df.loc[CGP_df['unique_ID'] == unique_id]
         
         # Get annual CO2 emissions (in GtCO2)
-        annual_co2 = float(plant_data['co2emissions']) / 1e9  # Convert to GtCO2 and ensure scalar
+        annual_co2 = float(plant_data['co2_emissions']) / 1e9  # Convert to GtCO2 and ensure scalar
         
         # Add to total emissions
         yr_offset = int(plant_data['Year_of_Commission'].iloc[0] - start_year)  # Ensure integer offset
@@ -2912,7 +3026,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
     
     return (cumulative_emissions, co2_temp_response, 
             cumulative_bc_emissions, cumulative_dt_drf, cumulative_dt_snowrf, 
-            total_bc_temp_response, total_temp_response)
+            total_bc_temp_response, total_temp_response, max_temp_response, min_temp_response, min_bc_temp_response, max_bc_temp_response, min_combined, max_combined)
 
 def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=2030, start_year=2000, end_year=2060, 
                                                      shutdown_age=None, fraction_to_shutdown=None,
@@ -3439,7 +3553,7 @@ def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=203
 
 
 
-def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0], 
+def compare_individual_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0], 
                                         force_closure_by=2040,
                                         strategies=['Year_of_Commission', 'MW', 'CO2_weighted_capacity_1000tonsperMW'],
                                         impact_var='BC_pop_weight_mean_conc',
@@ -3549,12 +3663,13 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
             bc_conc[0] = 0  # Initialize
             for imp_country in impacted_countries:
                 if imp_country in scenario_ds.country_impacted.values:
-                    bc_data = sorted_ds.sel(country_impacted=imp_country)[impact_var]
+                    print(timeline)
+                    bc_data = sorted_ds.sel(country_impacted=imp_country).sel(scenario_year = timeline[0])[impact_var]
                     bc_conc[0] += bc_data.sum().values
 
   
             # Get CO2 emissions
-            co2_emis[0] = sorted_ds['co2_emissions'].sum().values / 1e6  # Convert to million tons
+            co2_emis[0] = sorted_ds['co2_emissions'].sel(scenario_year = timeline[0]).sum().values / 1e9  # Convert to giga tons
             cumulative_co2[0] = co2_emis[0]
             
             # Simulate retirement over time
@@ -3585,11 +3700,11 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
                 if plants_left > 0:
                     for imp_country in impacted_countries:
                         if imp_country in scenario_ds.country_impacted.values:
-                            bc_data = remaining_ds.sel(country_impacted=imp_country)[impact_var]
+                            bc_data = remaining_ds.sel(country_impacted=imp_country).sel(scenario_year = year)[impact_var]
                             bc_conc[i] += bc_data.sum().values
                 
                 # Calculate remaining CO2 emissions
-                co2_emis[i] = remaining_ds['co2_emissions'].sum().values / 1e6 if plants_left > 0 else 0
+                co2_emis[i] = remaining_ds['co2_emissions'].sel(scenario_year = year).sum().values / 1e9 if plants_left > 0 else 0
                 
                 # Calculate cumulative CO2 emissions
                 cumulative_co2[i] = cumulative_co2[i-1] + co2_emis[i]
@@ -3628,8 +3743,8 @@ def compare_vietnam_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
         axs[row].grid(True, linestyle='--', alpha=0.5)
     
     axs[0].set_ylabel('Capacity (GW)')
-    axs[1].set_ylabel(f'BC Concentration in\n{impacted_country} (ng/m³)')
-    axs[2].set_ylabel('Cumulative CO₂ (Mt)')
+    axs[1].set_ylabel(f'BC Concentration (ng/m³)')
+    axs[2].set_ylabel('Cumulative CO₂ (Gt)')
     axs[2].set_xlabel('Year')
 
     # Create legend elements for rates (colors)
@@ -3801,11 +3916,11 @@ def compare_multi_country_strategies_and_rates(scenario_ds, countries=['MALAYSIA
                 bc_conc[0] = 0  # Initialize
                 for imp_country in impacted_countries:
                     if imp_country in scenario_ds.country_impacted.values:
-                        bc_data = sorted_ds.sel(country_impacted=imp_country)[impact_var]
+                        bc_data = sorted_ds.sel(country_impacted=imp_country).sel(scenario_year = timeline[country][0])[impact_var]
                         bc_conc[0] += bc_data.sum().values
 
                 # Get CO2 emissions
-                co2_emis[0] = sorted_ds['co2_emissions'].sum().values / 1e6  # Convert to million tons
+                co2_emis[0] = sorted_ds['co2_emissions'].sel(scenario_year = timeline[country][0]).sum().values / 1e9  # Convert to giga tons
                 cumulative_co2[0] = co2_emis[0]
                 
                 # Simulate retirement over time
@@ -3836,11 +3951,11 @@ def compare_multi_country_strategies_and_rates(scenario_ds, countries=['MALAYSIA
                     if plants_left > 0:
                         for imp_country in impacted_countries:
                             if imp_country in scenario_ds.country_impacted.values:
-                                bc_data = remaining_ds.sel(country_impacted=imp_country)[impact_var]
+                                bc_data = remaining_ds.sel(country_impacted=imp_country).sel(scenario_year = year)[impact_var]
                                 bc_conc[i] += bc_data.sum().values
                     
                     # Calculate remaining CO2 emissions
-                    co2_emis[i] = remaining_ds['co2_emissions'].sum().values / 1e6 if plants_left > 0 else 0
+                    co2_emis[i] = remaining_ds['co2_emissions'].sel(scenario_year = year).sum().values / 1e9 if plants_left > 0 else 0
                     
                     # Calculate cumulative CO2 emissions
                     cumulative_co2[i] = cumulative_co2[i-1] + co2_emis[i]
@@ -3914,7 +4029,7 @@ def compare_multi_country_strategies_and_rates(scenario_ds, countries=['MALAYSIA
     # Set row labels (only for first column)
     axs[0, 0].set_ylabel('Capacity (GW)', fontsize=14)
     axs[1, 0].set_ylabel(f'Population weighted mean\nBlack Carbon Concentration\n(ng/m³/person)', fontsize=14)
-    axs[2, 0].set_ylabel('Cumulative CO₂ (Mt)', fontsize=14)
+    axs[2, 0].set_ylabel('Cumulative CO₂ (Gt)', fontsize=14)
     
     # Set x-axis labels and ticks (only for bottom row)
     for col_idx in range(len(countries)):
