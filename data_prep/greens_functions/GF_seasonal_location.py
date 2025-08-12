@@ -118,7 +118,7 @@ mw_BC = {'BC_total':12.011}
 T_p_ds = xr.open_mfdataset('/net/geoschem/data/gcgrid/data/ExtData/GEOS_0.5x0.625/MERRA2/2016/*/MERRA2.2016*.I3.05x0625.nc4')
 T_p_ds = T_p_ds.groupby('time.date').mean(dim = 'time').rename({'date':'time'})
 #create regridder (reusing weights)
-regridder = xe.Regridder(T_p_ds, dict_conc[list(dict_conc.keys())[0]], 'bilinear', reuse_weights = True, weights = 'tp_bilinear_weights.nc')
+regridder = xe.Regridder(T_p_ds, dict_conc[list(dict_conc.keys())[0]], 'bilinear', reuse_weights = True, weights = '../data_output/tp_bilinear_weights.nc')
 regridder  # print basic regridder information.
 
 #regrid according to our ds_out grid
