@@ -13,12 +13,12 @@ names_dict = {'SEA':'Southeast Asia', 'Indo':'Indonesia', 'Malay':'Malaysia', 'V
 
 
 ################## Data paths #############
-GF_name_path = '/net/fs11/d0/emfreese/BC-IRF/data_output/greens_functions/'
-data_output_path = '/net/fs11/d0/emfreese/BC-IRF/data_output/'
-raw_data_in_path = '/net/fs11/d0/emfreese/BC-IRF/raw_data_inputs/'
-data_prep_path = '/net/fs11/d0/emfreese/BC-IRF/data_prep/'
-geos_chem_data_path = '/net/fs11/d0/emfreese/GCrundirs/IRF_runs/'
-figures_data_path = '/net/fs11/d0/emfreese/BC-IRF/figures/'
+GF_name_path = '/home/emfreese/fs11/d0/emfreese/BC-IRF/data_output/greens_functions/'
+data_output_path = '/home/emfreese/fs11/d0/emfreese/BC-IRF/data_output/'
+raw_data_in_path = '/home/emfreese/fs11/d0/emfreese/BC-IRF/raw_data_inputs/'
+data_prep_path = '/home/emfreese/fs11/d0/emfreese/BC-IRF/data_prep/'
+geos_chem_data_path = '/home/emfreese/fs11/d0/emfreese/GCrundirs/IRF_runs/'
+figures_data_path = '/home/emfreese/fs11/d0/emfreese/BC-IRF/figures/'
 
 
 
@@ -198,7 +198,7 @@ def grouped_weighted_avg(values, weights):
 # ######## height #####
 ## from http://wiki.seas.harvard.edu/geos-chem/index.php/GEOS-Chem_vertical_grids
 
-height = pd.read_excel(f'{utils.raw_data_in_path}gc_72_estimate.xlsx', index_col = 0)
+height = pd.read_excel(f'{raw_data_in_path}gc_72_estimate.xlsx', index_col = 0)
 height = height.reindex(index=height.index[::-1])
 height_ds = height.diff().dropna().to_xarray().rename({'L':'lev'})
 height_ds = height_ds.rename({'Altitude (km)':'dz'}) 
@@ -209,7 +209,7 @@ height_ds['dz'].attrs = {'units':'m'}
 # pressure = pd.read_excel('/net/fs11/d0/emfreese/BC-IRF/GC_lev72.xlsx')
 # pressure_ds = (pressure.loc[~pressure['L'].isna()].set_index(np.arange(72,0,-1))['Pressure']*100).to_xarray().rename({'index':'lev'}).sortby('lev')
 
-pressure = pd.read_excel(f'{utils.raw_data_in_path}gc_72_estimate.xlsx', index_col = 0)
+pressure = pd.read_excel(f'{raw_data_in_path}gc_72_estimate.xlsx', index_col = 0)
 pressure = pressure.reindex(index=pressure.index[::-1])*-1
 pressure_ds = pressure.diff().dropna().to_xarray().rename({'L':'lev'})*100 # convert to Pa
 pressure_ds = pressure_ds.rename({'Pressure (hPa)':'dP'}) 
