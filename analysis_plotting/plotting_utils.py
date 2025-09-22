@@ -186,7 +186,7 @@ def plot_concentration_maps(conc_by_location, map_locations, shutdown_years,
             # Add subplot lettering
             subplot_letter = chr(ord('a') + row_idx * n_locations + col_idx)
             ax.text(0.04, 0.04, f'{subplot_letter})', transform=ax.transAxes, 
-                    fontsize=16, fontweight='bold')
+                    fontsize=16)
             
     # Add colorbar
     cb_ax = fig.add_axes([0.2, -0.05, 0.6, 0.02])
@@ -4125,3 +4125,882 @@ def compare_multi_country_strategies_and_rates(scenario_ds, countries=['MALAYSIA
         plt.subplots_adjust(right=0.85)  # Make room for the legend on the right
 
     return fig, axs, country_data
+
+
+
+def compare_multi_country_normalized_metrics(scenario_ds, countries=['MALAYSIA', 'INDONESIA', 'VIETNAM'],
+                                            rates=None,
+                                            force_closure_by=None,
+                                            strategies=['Year_of_Commission', 'MW', 'EMISFACTOR.CO2'],
+                                            impact_var='BC_pop_weight_mean_conc',
+                                            figsize=(20, 8)):
+    """
+    Plot CO2 emissions per GW and population-weighted mean BC concentration per GW for multiple countries.
+    Each column is a country, each row is a normalized metric.
+    """
+    from matplotlib.lines import Line2D
+
+    # Default rates and closure years if not provided
+    if rates is None:
+        rates = {
+            'INDONESIA': [9.0, 18.0, 27.0],
+            'MALAYSIA': [0.5, 1.0, 2.0],
+            'VIETNAM': [1.0, 3.0, 5.0]
+        }
+    if force_closure_by is None:
+        force_closure_by = {'MALAYSIA': 2045, 'CAMBODIA': 2050, 'INDONESIA': 2040, 'VIETNAM': 2050}
+
+    # Colors for rates
+    colors = [
+        "#007336", "#E66F20", "#7CC8FF", "#0F8B8D", "#E07C10", "#52B0FD", "#0B7F73", "#D85E0D", "#179DFC"
+    ]
+    names_dict = {0: 'Ambitious', 1: 'On-time', 2: 'Slow'}
+    
+    # Strategy names for legend
+    strategy_names = {
+        'Year_of_Commission': 'Age (oldest first)',
+        'MW': 'Capacity (largest first)', 
+        'EMISFACTOR.CO2': 'CO₂ intensity (highest first)'
+    }
+
+    fig, axs = plt.subplots(2, len(countries), figsize=figsize)
+    rate_color_map = {}
+    timeline = {}
+    country_data = {}
+
+    mult_val = 0
+    for col_idx, country in enumerate(countries):
+        rate_color_map[country] = {rate: colors[i+mult_val*3] for i, rate in enumerate(rates[country])}
+        timeline[country] = np.arange(2025, force_closure_by[country] + 1)
+        country_data[country] = {}
+
+        country_ds = scenario_ds.where(scenario_ds.country_emitting == country, drop=True)
+        total_plants = len(country_ds.unique_ID)
+
+        for s_idx, strategy in enumerate(strategies):
+            country_data[country][strategy] = {}
+            if strategy == 'Year_of_Commission':
+                sorted_ds = country_ds.sortby(strategy)
+            else:
+                sorted_ds = country_ds.sortby(strategy, ascending=False)
+            for r_idx, rate in enumerate(rates[country]):
+                capacity = np.zeros(len(timeline[country]))
+                co2_emissions = np.zeros(len(timeline[country]))
+                bc_conc = np.zeros(len(timeline[country]))
+
+                # Initialize with all plants operating
+                capacity[0] = sorted_ds['MW'].sum().values / 1000  # GW
+                co2_emissions[0] = sorted_ds['co2_emissions'].sel(scenario_year=timeline[country][0]).sum().values / 1e9
+                bc_conc[0] = sorted_ds.sel(scenario_year=timeline[country][0])[impact_var].sum().values
+
+                plants_left = total_plants
+                for i, year in enumerate(timeline[country][1:], 1):
+                    years_until_force_closure = force_closure_by[country] - year
+                    if years_until_force_closure > 0:
+                        plants_to_retire_this_year = min(rate, plants_left)
+                    else:
+                        plants_to_retire_this_year = plants_left
+                    plants_left -= plants_to_retire_this_year
+                    remaining_ds = sorted_ds.isel(unique_ID=slice(int(total_plants - plants_left), total_plants))
+                    capacity[i] = remaining_ds['MW'].sum().values / 1000 if plants_left > 0 else 0
+                    bc_conc[i] = remaining_ds.sel(scenario_year=year)[impact_var].sum().values if plants_left > 0 else 0
+                    co2_emissions[i] = remaining_ds['co2_emissions'].sel(scenario_year=year).sum().values / 1e9 if plants_left > 0 else 0
+
+                # Normalize metrics by GW
+                co2_per_gw = np.divide(co2_emissions, capacity, out=np.zeros_like(co2_emissions), where=capacity>0)
+                bc_conc_per_gw = np.divide(bc_conc, capacity, out=np.zeros_like(bc_conc), where=capacity>0)
+
+                # Find the last non-zero index for plotting (stop before values become 0)
+                last_nonzero_co2 = np.where(co2_per_gw > 0)[0]
+                last_nonzero_bc = np.where(bc_conc_per_gw > 0)[0]
+                
+                # Get the last valid index for each metric
+                co2_end_idx = last_nonzero_co2[-1] + 1 if len(last_nonzero_co2) > 0 else 1
+                bc_end_idx = last_nonzero_bc[-1] + 1 if len(last_nonzero_bc) > 0 else 1
+
+                country_data[country][strategy][rate] = {
+                    'years': timeline[country],
+                    'co2_per_gw': co2_per_gw,
+                    'bc_conc_per_gw': bc_conc_per_gw,
+                    'capacity': capacity
+                }
+
+                line_style = ['-', '--', ':'][s_idx % 3]
+                color = rate_color_map[country][rate]
+                label = f"{names_dict[r_idx]}: {rate:.1f} plants/year" if col_idx == 0 and s_idx == 0 else None
+
+                # Row 0: CO2 emissions per GW (plot only up to last non-zero value)
+                axs[0, col_idx].plot(timeline[country][:co2_end_idx], co2_per_gw[:co2_end_idx], 
+                                   color=color, linestyle=line_style, label=label, linewidth=2)
+                # Row 1: population-weighted mean BC concentration per GW (plot only up to last non-zero value)
+                axs[1, col_idx].plot(timeline[country][:bc_end_idx], bc_conc_per_gw[:bc_end_idx], 
+                                   color=color, linestyle=line_style, linewidth=2)
+        mult_val += 1
+
+    # Titles and labels
+    for col_idx, country in enumerate(countries):
+        axs[0, col_idx].set_title(f'{country.title()}', fontsize=16)
+    axs[0, 0].set_ylabel('CO₂ Emissions per GW (Gt/yr/GW)', fontsize=14)
+    axs[1, 0].set_ylabel('Pop-weighted BC conc. per GW (ng/m³/GW)', fontsize=14)
+    for col_idx in range(len(countries)):
+        axs[1, col_idx].set_xlabel('Year', fontsize=14)
+        x_ticks = np.arange(2025, 2051, 5)
+        axs[1, col_idx].set_xticks(x_ticks)
+        axs[0, col_idx].set_xticks([])
+
+    # Grid and subplot letters
+    for row in range(2):
+        for col in range(len(countries)):
+            axs[row, col].grid(True, linestyle='--', alpha=0.5)
+            subplot_letter = chr(ord('a') + row * len(countries) + col)
+            axs[row, col].text(0.04, 0.93, f'{subplot_letter})', transform=axs[row, col].transAxes,
+                               fontsize=14, fontweight='bold')
+            axs[row, col].set_xlim([2024, 2050])
+            axs[row, col].set_ylim(bottom=0, top=axs[row, col].get_ylim()[1]*1.06)
+
+    # Legends for closure rates (existing)
+    for col, country in enumerate(countries):
+        country_rates_list = rates[country]
+        country_rate_legend_elements = [Line2D([0], [0], color=rate_color_map[country][rate], lw=2,
+                                               label=f"{names_dict[idx]}: {rate:.0f} plants/year" if rate >= 1 else f"{names_dict[idx]}: {rate:.1f} plants/year")
+                                        for idx, rate in enumerate(country_rates_list)]
+        axs[1, col].legend(handles=country_rate_legend_elements,
+                           loc='upper center',
+                           bbox_to_anchor=(0.5, -0.15),
+                           title=f"Closure Rate",
+                           fontsize=12,
+                           frameon=True,
+                           ncol=min(len(country_rates_list), 1))
+
+    # Add strategy legend (new)
+    strategy_legend_elements = [Line2D([0], [0], color='black', linestyle=['-', '--', ':'][i], lw=2,
+                                       label=strategy_names[strategy])
+                                for i, strategy in enumerate(strategies)]
+    axs[0, -1].legend(handles=strategy_legend_elements,
+                      loc='upper center',
+                      bbox_to_anchor=(0.5, -0.05),
+                      title="Shutdown Strategy",
+                      fontsize=12,
+                      frameon=True,
+                      ncol=1)
+
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.18)
+    return fig, axs, country_data
+
+
+# ...existing code...
+
+def plot_marginal_benefits_per_gw_lost(scenario_ds, countries=['MALAYSIA', 'INDONESIA', 'VIETNAM'],
+                                      rates=None, force_closure_by=None,
+                                      strategies=['Year_of_Commission', 'MW', 'EMISFACTOR.CO2'],
+                                      impact_var='BC_pop_weight_mean_conc',
+                                      tcr=1.65,  # Transient Climate Response in K per CO2 doubling
+                                      figsize=(20, 8)):
+    """
+    Plot marginal benefits per GW of capacity lost: temperature reduction and air quality improvement
+    Layout: 2 rows x len(countries) columns
+    Row 1: Temperature benefits (K per GW lost) - includes CO2 + BC warming
+    Row 2: Air quality benefits (ng/m³ per GW lost)
+    """
+    from matplotlib.lines import Line2D
+
+    # Default rates and closure years if not provided
+    if rates is None:
+        rates = {
+            'INDONESIA': [9.0, 18.0, 27.0],
+            'MALAYSIA': [0.5, 1.0, 2.0],
+            'VIETNAM': [1.0, 3.0, 5.0]
+        }
+    if force_closure_by is None:
+        force_closure_by = {'MALAYSIA': 2045, 'CAMBODIA': 2050, 'INDONESIA': 2040, 'VIETNAM': 2050}
+
+    # Colors for rates
+    colors = [
+        "#007336", "#E66F20", "#7CC8FF", "#0F8B8D", "#E07C10", "#52B0FD", "#0B7F73", "#D85E0D", "#179DFC"
+    ]
+    names_dict = {0: 'Ambitious', 1: 'On-time', 2: 'Slow'}
+    
+    # Strategy names for legend
+    strategy_names = {
+        'Year_of_Commission': 'Age (oldest first)',
+        'MW': 'Capacity (largest first)', 
+        'EMISFACTOR.CO2': 'CO₂ intensity (highest first)'
+    }
+
+    fig, axs = plt.subplots(2, len(countries), figsize=figsize)
+    rate_color_map = {}
+    timeline = {}
+    country_data = {}
+
+    # CO2 conversion factor: Gt CO2 to ppm (approximately 2.13 ppm per Gt CO2)
+    co2_to_ppm = 2.13
+    # TCR conversion: K per CO2 doubling (280 ppm baseline)
+    co2_baseline_ppm = 280
+    
+    mult_val = 0
+    for col_idx, country in enumerate(countries):
+        rate_color_map[country] = {rate: colors[i+mult_val*3] for i, rate in enumerate(rates[country])}
+        timeline[country] = np.arange(2025, force_closure_by[country] + 1)
+        country_data[country] = {}
+
+        country_ds = scenario_ds.where(scenario_ds.country_emitting == country, drop=True)
+        total_plants = len(country_ds.unique_ID)
+
+        for s_idx, strategy in enumerate(strategies):
+            country_data[country][strategy] = {}
+            if strategy == 'Year_of_Commission':
+                sorted_ds = country_ds.sortby(strategy)
+            else:
+                sorted_ds = country_ds.sortby(strategy, ascending=False)
+                
+            for r_idx, rate in enumerate(rates[country]):
+                capacity = np.zeros(len(timeline[country]))
+                co2_emissions = np.zeros(len(timeline[country]))
+                bc_conc = np.zeros(len(timeline[country]))
+                bc_temp = np.zeros(len(timeline[country]))
+                
+                # Arrays to track marginal benefits
+                marginal_temp_benefit = np.zeros(len(timeline[country]) - 1)
+                marginal_bc_benefit = np.zeros(len(timeline[country]) - 1)
+                capacity_lost = np.zeros(len(timeline[country]) - 1)
+
+                # Initialize with all plants operating
+                capacity[0] = sorted_ds['MW'].sum().values / 1000  # GW
+                co2_emissions[0] = sorted_ds['co2_emissions'].sel(scenario_year=timeline[country][0]).sum().values / 1e9  # Gt CO2
+                bc_conc[0] = sorted_ds.sel(scenario_year=timeline[country][0])[impact_var].sum().values
+                bc_temp[0] = sorted_ds['dt_sum'].sel(scenario_year=timeline[country][0]).sum().values
+
+                plants_left = total_plants
+                for i, year in enumerate(timeline[country][1:], 1):
+                    years_until_force_closure = force_closure_by[country] - year
+                    if years_until_force_closure > 0:
+                        plants_to_retire_this_year = min(rate, plants_left)
+                    else:
+                        plants_to_retire_this_year = plants_left
+                    plants_left -= plants_to_retire_this_year
+                    remaining_ds = sorted_ds.isel(unique_ID=slice(int(total_plants - plants_left), total_plants))
+                    
+                    # Current year values
+                    capacity[i] = remaining_ds['MW'].sum().values / 1000 if plants_left > 0 else 0
+                    co2_emissions[i] = remaining_ds['co2_emissions'].sel(scenario_year=year).sum().values / 1e9 if plants_left > 0 else 0
+                    bc_conc[i] = remaining_ds.sel(scenario_year=year)[impact_var].sum().values if plants_left > 0 else 0
+                    bc_temp[i] = remaining_ds['dt_sum'].sel(scenario_year=year).sum().values if plants_left > 0 else 0
+                    
+                    # Calculate marginal benefits (difference from previous year)
+                    capacity_lost[i-1] = capacity[i-1] - capacity[i]  # GW lost this year
+                    
+                    if capacity_lost[i-1] > 0:  # Only calculate if capacity was actually lost
+                        # CO2 temperature benefit (using TCR)
+                        co2_avoided = co2_emissions[i-1] - co2_emissions[i]  # Gt CO2 avoided
+                        co2_ppm_avoided = co2_avoided * co2_to_ppm
+                        co2_temp_benefit = tcr * np.log2((co2_baseline_ppm + co2_ppm_avoided) / co2_baseline_ppm)
+                        
+                        # BC temperature benefit
+                        bc_temp_benefit = bc_temp[i-1] - bc_temp[i]  # K avoided
+                        
+                        # Total temperature benefit
+                        total_temp_benefit = co2_temp_benefit + bc_temp_benefit
+                        
+                        # Air quality benefit
+                        bc_benefit = bc_conc[i-1] - bc_conc[i]  # ng/m³ improvement
+                        
+                        # Marginal benefits per GW
+                        marginal_temp_benefit[i-1] = total_temp_benefit / capacity_lost[i-1]
+                        marginal_bc_benefit[i-1] = bc_benefit / capacity_lost[i-1]
+
+                country_data[country][strategy][rate] = {
+                    'years': timeline[country][1:],  # Years when shutdowns occur
+                    'marginal_temp_benefit': marginal_temp_benefit,
+                    'marginal_bc_benefit': marginal_bc_benefit,
+                    'capacity_lost': capacity_lost
+                }
+
+                line_style = ['-', '--', ':'][s_idx % 3]
+                color = rate_color_map[country][rate]
+                label = f"{names_dict[r_idx]}: {rate:.1f} plants/year" if col_idx == 0 and s_idx == 0 else None
+
+                # Only plot where capacity was actually lost
+                valid_indices = capacity_lost > 0
+                if np.any(valid_indices):
+                    # Row 0: Temperature benefits per GW
+                    axs[0, col_idx].plot(timeline[country][1:][valid_indices], 
+                                       marginal_temp_benefit[valid_indices], 
+                                       color=color, linestyle=line_style, label=label, linewidth=2)
+                    # Row 1: Air quality benefits per GW
+                    axs[1, col_idx].plot(timeline[country][1:][valid_indices], 
+                                       marginal_bc_benefit[valid_indices], 
+                                       color=color, linestyle=line_style, linewidth=2)
+        mult_val += 1
+
+    # Titles and labels
+    for col_idx, country in enumerate(countries):
+        axs[0, col_idx].set_title(f'{country.title()}', fontsize=16)
+    axs[0, 0].set_ylabel('Temperature Benefit\n(K per GW shut down)', fontsize=14)
+    axs[1, 0].set_ylabel('Air Quality Benefit\n(ng/m³ per GW shut down)', fontsize=14)
+    for col_idx in range(len(countries)):
+        axs[1, col_idx].set_xlabel('Year', fontsize=14)
+        x_ticks = np.arange(2025, 2051, 5)
+        axs[1, col_idx].set_xticks(x_ticks)
+        axs[0, col_idx].set_xticks([])
+
+    # Grid and subplot letters
+    for row in range(2):
+        for col in range(len(countries)):
+            axs[row, col].grid(True, linestyle='--', alpha=0.5)
+            subplot_letter = chr(ord('a') + row * len(countries) + col)
+            axs[row, col].text(0.04, 0.93, f'{subplot_letter})', transform=axs[row, col].transAxes,
+                               fontsize=14, fontweight='bold')
+            axs[row, col].set_xlim([2024, 2050])
+            if row == 0:  # Temperature benefits
+                axs[row, col].set_ylim(bottom=0)
+            else:  # Air quality benefits
+                axs[row, col].set_ylim(bottom=0)
+
+    # Legends for closure rates
+    for col, country in enumerate(countries):
+        country_rates_list = rates[country]
+        country_rate_legend_elements = [Line2D([0], [0], color=rate_color_map[country][rate], lw=2,
+                                               label=f"{names_dict[idx]}: {rate:.0f} plants/year" if rate >= 1 else f"{names_dict[idx]}: {rate:.1f} plants/year")
+                                        for idx, rate in enumerate(country_rates_list)]
+        axs[1, col].legend(handles=country_rate_legend_elements,
+                           loc='upper center',
+                           bbox_to_anchor=(0.5, -0.15),
+                           title=f"Closure Rate",
+                           fontsize=12,
+                           frameon=True,
+                           ncol=min(len(country_rates_list), 1))
+
+    # Add strategy legend
+    strategy_legend_elements = [Line2D([0], [0], color='black', linestyle=['-', '--', ':'][i], lw=2,
+                                       label=strategy_names[strategy])
+                                for i, strategy in enumerate(strategies)]
+    axs[0, -1].legend(handles=strategy_legend_elements,
+                      loc='upper center',
+                      bbox_to_anchor=(0.5, -0.05),
+                      title="Shutdown Strategy",
+                      fontsize=12,
+                      frameon=True,
+                      ncol=1)
+
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.18)
+    return fig, axs, country_data
+
+def plot_plant_benefits_per_capacity_map(single_year_ds, CGP_df, country_df, impacted_countries,
+                                        impact_var='BC_pop_weight_mean_conc',
+                                        tcr=1.65, figsize=(16, 10)):
+    """
+    Plot BC concentration benefit vs temperature benefit per MW for each coal plant on a map
+    """
+    from shapely.geometry import Point
+    import geopandas as gpd
+    import matplotlib.colors as mcolors
+    
+    # Calculate benefits per MW for each plant
+    plant_benefits = []
+    
+    for unique_id in single_year_ds.unique_ID.values:
+        plant_data = single_year_ds.sel(unique_ID=unique_id)
+        plant_info = CGP_df.loc[CGP_df.index == unique_id]
+        
+        if len(plant_info) > 0:
+            # Get plant capacity in MW
+            capacity_mw = plant_data['MW'].values.item()
+            
+            if capacity_mw > 0:  # Only include plants with capacity
+                # Air quality benefit per MW (ng/m³ per MW)
+                bc_benefit_per_mw = plant_data[impact_var].sum('country_impacted').mean('scenario_year').values.item() / capacity_mw
+                
+                # Temperature benefit per MW
+                # CO2 component - direct marginal calculation
+                co2_emissions_gt = plant_data['co2_emissions'].mean('scenario_year').values.item() / 1e9  # Gt CO2/yr
+                # TCR: approximately 1.65 K per 1000 Gt CO2 (for marginal emissions)
+                co2_temp_k = tcr * co2_emissions_gt / 1000  # K per year from CO2
+                
+                # BC component
+                bc_temp_k = plant_data['dt_sum'].mean('scenario_year').values.item()
+                
+                # Total temperature per MW
+                total_temp_per_mw = (co2_temp_k + bc_temp_k) / capacity_mw
+
+                plant_benefits.append({
+                    'unique_ID': unique_id,
+                    'latitude': plant_info['latitude'].iloc[0],
+                    'longitude': plant_info['longitude'].iloc[0],
+                    'country': plant_info['COUNTRY'].iloc[0],
+                    'capacity_mw': capacity_mw,
+                    'bc_benefit_per_mw': bc_benefit_per_mw,
+                    'temp_benefit_per_mw': total_temp_per_mw
+                })
+    
+    # Convert to GeoDataFrame
+    benefits_df = pd.DataFrame(plant_benefits)
+    geometry = [Point(xy) for xy in zip(benefits_df['longitude'], benefits_df['latitude'])]
+    gdf_benefits = gpd.GeoDataFrame(benefits_df, geometry=geometry)
+    
+    # Create country color mapping
+    country_color_map = {
+        'MALAYSIA': '#AAA662',  
+        'CAMBODIA': '#029386',  
+        'INDONESIA': '#FF6347', 
+        'VIETNAM': '#DAA520'    
+    }
+    countries = country_color_map.keys()
+    gdf_benefits['country_color'] = gdf_benefits['country'].map(country_color_map)
+    
+    # Create the plot with 2x2 grid where first column spans 2 rows for maps, second column is one tall plot
+    fig = plt.figure(figsize=figsize)
+    
+    # Create a GridSpec: 2 rows, 2 columns with width ratios favoring the maps
+    gs = fig.add_gridspec(2, 2, width_ratios=[2, 1.5], height_ratios=[1, 1], 
+                          hspace=0.2, wspace=0.01)
+    
+    # First column: two maps stacked vertically
+    ax1 = fig.add_subplot(gs[0, 0])  # Top left
+    ax2 = fig.add_subplot(gs[1, 0])  # Bottom left
+    
+    # Second column: one tall scatter plot spanning both rows
+    ax3 = fig.add_subplot(gs[:, 1])  # Right side, spanning both rows
+    country_fill_color = 'lightgray'
+    country_edge_color = 'darkgray'
+    # Plot 1: BC benefit per MW (top left)
+    country_df.plot(ax=ax1, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+    # sea_countries = country_df[country_df['country'].isin(impacted_countries)]
+    # #sea_countries.plot(ax=ax1, color=country_fill_color, edgecolor=country_edge_color, alpha=0.3, linewidth=0.8)
+    
+    scatter1 = gdf_benefits.plot(ax=ax1, column='bc_benefit_per_mw', cmap='Greens',  edgecolors = 'black',  linewidth = 0.5,
+                                markersize=30, legend=True, vmin = 0, vmax = gdf_benefits['bc_benefit_per_mw'].max()*.6,
+                                legend_kwds={'label': 'BC Benefit\n(ng/m³/MW)', 'shrink': 0.6})
+    ax1.set_title('Air Quality Benefit per MW', fontsize=14)
+    ax1.set_xlim(90, 150)
+    ax1.set_ylim(-15, 30)
+    ax1.set_ylabel('Latitude', fontsize=12)
+    ax1.grid(True, alpha=0.3)
+    # Remove x-axis labels for top plot
+    ax1.set_xticklabels([])
+    
+    # Plot 2: Temperature benefit per MW (bottom left)
+    country_df.plot(ax=ax2, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+    # sea_countries.plot(ax=ax2, color=country_fill_color, edgecolor=country_edge_color, alpha=0.3, linewidth=0.8)
+    
+    scatter2 = gdf_benefits.plot(ax=ax2, column='temp_benefit_per_mw', cmap='Blues', edgecolors = 'black',  linewidth = 0.5,
+                                markersize=30, legend=True, vmin = 0, vmax = gdf_benefits['temp_benefit_per_mw'].max()*.7,
+                                legend_kwds={'label': 'Temp Benefit\n(K/MW)', 'shrink': 0.6})
+    ax2.set_title('Temperature Benefit per MW', fontsize=14)
+    ax2.set_xlim(90, 150)
+    ax2.set_ylim(-15, 30)
+    ax2.set_xlabel('Longitude', fontsize=12)
+    ax2.set_ylabel('Latitude', fontsize=12)
+    ax2.grid(True, alpha=0.3)
+    
+    # Calculate median values for the lines
+    median_temp = gdf_benefits['temp_benefit_per_mw'].median()
+    median_bc = gdf_benefits['bc_benefit_per_mw'].median()
+    
+    # Plot 3: Scatter plot of benefits colored by country (right side, tall)
+    for country in countries:
+        country_data = gdf_benefits[gdf_benefits['country'] == country]
+        ax3.scatter(country_data['temp_benefit_per_mw'], country_data['bc_benefit_per_mw'],  edgecolors = 'black', linewidth = 0.5,
+                   c=[country_color_map[country]], label=country, s=40)
+    
+    # Add median lines
+    ax3.axvline(x=median_temp, color='black', linestyle='--', alpha=0.7, linewidth=2, 
+                label=f'Median Temp Benefit\n({median_temp:.2e} K/MW)')
+    ax3.axhline(y=median_bc, color='gray', linestyle='--', alpha=0.7, linewidth=2,
+                label=f'Median BC Benefit\n({median_bc:.2e} ng/m³/MW)')
+    
+    ax3.set_xlabel('Temperature Benefit per MW reduction\n(K/MW)', fontsize=12)
+    ax3.set_ylabel('BC Benefit per MW reduction\n(ng/m³/MW)', fontsize=12)
+    ax3.set_title('Benefit Trade-off by Plant', fontsize=14)
+    ax3.grid(True, alpha=0.3)
+    ax3.legend(title='Country', fontsize=10, title_fontsize=10, loc='best')
+    
+    # Move y-axis ticks and labels to the right side for the scatter plot
+    ax3.yaxis.tick_right()
+    ax3.yaxis.set_label_position("right")
+    
+    plt.tight_layout()
+    
+    # Print some statistics
+    print(f"\nPlant Benefits Summary:")
+    print(f"Number of plants: {len(gdf_benefits)}")
+    print(f"BC benefit per MW - Mean: {gdf_benefits['bc_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['bc_benefit_per_mw'].min():.2e} - {gdf_benefits['bc_benefit_per_mw'].max():.2e}")
+    print(f"Temp benefit per MW - Mean: {gdf_benefits['temp_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['temp_benefit_per_mw'].min():.2e} - {gdf_benefits['temp_benefit_per_mw'].max():.2e}")
+    print(f"Median BC benefit per MW: {median_bc:.2e}")
+    print(f"Median Temp benefit per MW: {median_temp:.2e}")
+    
+    return fig, gdf_benefits
+
+def plot_plant_benefits_per_capacity_map_ratio(single_year_ds, CGP_df, country_df, impacted_countries,
+                                        impact_var='BC_pop_weight_mean_conc',
+                                        tcr=1.65, figsize=(18, 8)):
+    """
+    Plot BC concentration benefit vs temperature benefit per MW for each coal plant on a map
+    """
+    from shapely.geometry import Point
+    import geopandas as gpd
+    import matplotlib.colors as mcolors
+    
+    # Calculate benefits per MW for each plant
+    plant_benefits = []
+    
+    for unique_id in single_year_ds.unique_ID.values:
+        plant_data = single_year_ds.sel(unique_ID=unique_id)
+        plant_info = CGP_df.loc[CGP_df.index == unique_id]
+        
+        if len(plant_info) > 0:
+            # Get plant capacity in MW
+            capacity_mw = plant_data['MW'].values.item()
+            
+            if capacity_mw > 0:  # Only include plants with capacity
+                # Air quality benefit per MW (ng/m³ per MW)
+                bc_benefit_per_mw = plant_data[impact_var].sum('country_impacted').mean('scenario_year').values.item() / capacity_mw
+                
+                # Temperature benefit per MW
+                # CO2 component - direct marginal calculation
+                co2_emissions_gt = plant_data['co2_emissions'].mean('scenario_year').values.item() / 1e9  # Gt CO2/yr
+                # TCR: approximately 1.65 K per 1000 Gt CO2 (for marginal emissions)
+                co2_temp_k = tcr * co2_emissions_gt / 1000  # K per year from CO2
+                
+                # BC component
+                bc_temp_k = plant_data['dt_sum'].mean('scenario_year').values.item()
+                
+                # Total temperature per MW
+                total_temp_per_mw = (co2_temp_k + bc_temp_k) / capacity_mw
+
+                plant_benefits.append({
+                    'unique_ID': unique_id,
+                    'latitude': plant_info['latitude'].iloc[0],
+                    'longitude': plant_info['longitude'].iloc[0],
+                    'country': plant_info['COUNTRY'].iloc[0],
+                    'capacity_mw': capacity_mw,
+                    'bc_benefit_per_mw': bc_benefit_per_mw,
+                    'temp_benefit_per_mw': total_temp_per_mw
+                })
+    
+    # Convert to GeoDataFrame
+    benefits_df = pd.DataFrame(plant_benefits)
+    geometry = [Point(xy) for xy in zip(benefits_df['longitude'], benefits_df['latitude'])]
+    gdf_benefits = gpd.GeoDataFrame(benefits_df, geometry=geometry)
+    
+    # Calculate normalized ratio
+    # Normalize each benefit by its respective maximum
+    max_bc_benefit = gdf_benefits['bc_benefit_per_mw'].max()
+    max_temp_benefit = gdf_benefits['temp_benefit_per_mw'].max()
+    
+    gdf_benefits['normalized_bc'] = gdf_benefits['bc_benefit_per_mw'] / max_bc_benefit
+    gdf_benefits['normalized_temp'] = gdf_benefits['temp_benefit_per_mw'] / max_temp_benefit
+    
+    # Calculate the ratio of normalized benefits
+    gdf_benefits['benefit_ratio'] = gdf_benefits['normalized_bc'] / gdf_benefits['normalized_temp']
+    
+    # Create country color mapping
+    country_color_map = {
+        'MALAYSIA': '#AAA662',  
+        'CAMBODIA': '#029386',  
+        'INDONESIA': '#FF6347', 
+        'VIETNAM': '#DAA520'    
+    }
+    countries = country_color_map.keys()
+    gdf_benefits['country_color'] = gdf_benefits['country'].map(country_color_map)
+    
+    # Create the plot with 2x2 grid layout, but only use 3 plots
+    fig = plt.figure(figsize=figsize)
+    
+    # Create a GridSpec: 2 rows, 2 columns 
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.5, 1.5, 1.5], 
+                          hspace=0.2, wspace=0.15)
+    
+    # Three plots: two maps stacked vertically on left, one map on top right
+    ax1 = fig.add_subplot(gs[0])  # Top left - BC benefit
+    ax2 = fig.add_subplot(gs[1])  # Bottom left - Temperature benefit  
+    ax3 = fig.add_subplot(gs[2])  # Top right - Benefit ratio map
+    
+    country_fill_color = 'lightgray'
+    country_edge_color = 'darkgray'
+    
+    # Plot 1: BC benefit per MW (top left)
+    country_df.plot(ax=ax1, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+    
+    scatter1 = gdf_benefits.plot(ax=ax1, column='bc_benefit_per_mw', cmap='Greens', 
+                                markersize=20, legend=True, vmin=0, vmax=gdf_benefits['bc_benefit_per_mw'].max()*0.8,
+                                legend_kwds={'label': 'BC Benefit\n(ng/m³/MW)', 'shrink': 0.6},
+                                edgecolor='black', linewidth=0.5)
+    ax1.set_title('Air Quality Benefit per MW', fontsize=12)
+    ax1.set_xlim(90, 150)
+    ax1.set_ylim(-15, 30)
+    # ax1.set_ylabel('Latitude', fontsize=10)
+    # ax1.grid(True, alpha=0.3)
+    ax1.set_xticklabels([])
+    ax1.set_yticklabels([])
+
+    # Plot 2: Temperature benefit per MW (bottom left)
+    country_df.plot(ax=ax2, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+
+    scatter2 = gdf_benefits.plot(ax=ax2, column='temp_benefit_per_mw', cmap='Blues',
+                                markersize=20, legend=True, vmin=0, vmax=gdf_benefits['temp_benefit_per_mw'].max()*0.8,
+                                legend_kwds={'label': 'Temp Benefit\n(K/MW)', 'shrink': 0.6},
+                                edgecolor='black', linewidth=0.5)
+    ax2.set_title('Temperature Benefit per MW', fontsize=12)
+    ax2.set_xlim(90, 150)
+    ax2.set_ylim(-15, 30)
+    #ax2.set_xlabel('Longitude', fontsize=10)
+    #ax2.set_ylabel('Latitude', fontsize=10)
+    #ax2.grid(True, alpha=0.3)
+    ax2.set_xticklabels([])
+    ax2.set_yticklabels([])
+
+    # Plot 3: Normalized benefit ratio (top right) - diverging colormap centered at 1
+    country_df.plot(ax=ax3, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+    
+    # Set vmin and vmax to be symmetric around 1 for proper diverging colormap
+    ratio_max = gdf_benefits['benefit_ratio'].max()
+    ratio_min = gdf_benefits['benefit_ratio'].min()
+    
+    # Make the colormap symmetric around 1
+    vmax_distance = max(abs(ratio_max - 1), abs(ratio_min - 1))
+    vmin_plot = 1 - vmax_distance*.4
+    vmax_plot = 1 + vmax_distance*.4
+    
+    scatter3 = gdf_benefits.plot(ax=ax3, column='benefit_ratio', cmap='BrBG', 
+                                markersize=20, legend=True,
+                                vmin=vmin_plot, vmax=vmax_plot,
+                                legend_kwds={'label': 'BC/Temp\nBenefit Ratio', 'shrink': 0.6},
+                                edgecolor='black', linewidth=0.5)
+    ax3.set_title('Normalized Benefit Ratio\n(BC/Temperature)', fontsize=12)
+    ax3.set_xlim(90, 150)
+    ax3.set_ylim(-15, 30)
+    # ax3.grid(True, alpha=0.3)
+    # ax3.set_xticklabels([])
+    # ax3.set_yticklabels([])
+    ax3.set_xticklabels([])
+    ax3.set_yticklabels([])
+
+    plt.tight_layout()
+    
+    # Print some statistics
+    print(f"\nPlant Benefits Summary:")
+    print(f"Number of plants: {len(gdf_benefits)}")
+    print(f"BC benefit per MW - Mean: {gdf_benefits['bc_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['bc_benefit_per_mw'].min():.2e} - {gdf_benefits['bc_benefit_per_mw'].max():.2e}")
+    print(f"Temp benefit per MW - Mean: {gdf_benefits['temp_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['temp_benefit_per_mw'].min():.2e} - {gdf_benefits['temp_benefit_per_mw'].max():.2e}")
+    print(f"Benefit ratio - Mean: {gdf_benefits['benefit_ratio'].mean():.2f}, Range: {gdf_benefits['benefit_ratio'].min():.2f} - {gdf_benefits['benefit_ratio'].max():.2f}")
+    
+    return fig, gdf_benefits
+
+
+def plot_plant_benefits_per_capacity_map3(single_year_ds, CGP_df, country_df,
+                                        impact_var='BC_pop_weight_mean_conc',
+                                        tcr=1.65, figsize=(18, 8)):
+    """
+    Plot BC concentration benefit vs temperature benefit per MW for each coal plant on a map
+    """
+    from shapely.geometry import Point
+    import geopandas as gpd
+    import matplotlib.colors as mcolors
+    
+    # Calculate benefits per MW for each plant
+    plant_benefits = []
+    
+    for unique_id in single_year_ds.unique_ID.values:
+        plant_data = single_year_ds.sel(unique_ID=unique_id)
+        plant_info = CGP_df.loc[CGP_df.index == unique_id]
+        
+        if len(plant_info) > 0:
+            # Get plant capacity in MW
+            capacity_mw = plant_data['MW'].values.item()
+            
+            if capacity_mw > 0:  # Only include plants with capacity
+                # Air quality benefit per MW (ng/m³ per MW)
+                bc_benefit_per_mw = plant_data[impact_var].sum('country_impacted').mean('scenario_year').values.item() / capacity_mw
+                
+                # Temperature benefit per MW
+                # CO2 component - direct marginal calculation
+                co2_emissions_gt = plant_data['co2_emissions'].mean('scenario_year').values.item() / 1e9  # Gt CO2/yr
+                # TCR: approximately 1.65 K per 1000 Gt CO2 (for marginal emissions)
+                co2_temp_k = tcr * co2_emissions_gt / 1000  # K per year from CO2
+                
+                # BC component
+                bc_temp_k = plant_data['dt_sum'].mean('scenario_year').values.item()
+                
+                # Total temperature per MW
+                total_temp_per_mw = (co2_temp_k + bc_temp_k) / capacity_mw
+
+                plant_benefits.append({
+                    'unique_ID': unique_id,
+                    'latitude': plant_info['latitude'].iloc[0],
+                    'longitude': plant_info['longitude'].iloc[0],
+                    'country': plant_info['COUNTRY'].iloc[0],
+                    'capacity_mw': capacity_mw,
+                    'bc_benefit_per_mw': bc_benefit_per_mw,
+                    'temp_benefit_per_mw': total_temp_per_mw
+                })
+    
+    # Convert to GeoDataFrame
+    benefits_df = pd.DataFrame(plant_benefits)
+    geometry = [Point(xy) for xy in zip(benefits_df['longitude'], benefits_df['latitude'])]
+    gdf_benefits = gpd.GeoDataFrame(benefits_df, geometry=geometry)
+    
+    # Calculate median values for categorization
+    median_temp = gdf_benefits['temp_benefit_per_mw'].median()
+    median_bc = gdf_benefits['bc_benefit_per_mw'].median()
+    
+    # Create categorical benefit classification
+    def classify_benefits(row):
+        temp_above_median = row['temp_benefit_per_mw'] > median_temp
+        bc_above_median = row['bc_benefit_per_mw'] > median_bc
+        
+        if temp_above_median and bc_above_median:
+            return 'Above Median (Temperature and Black Carbon)'
+        elif not temp_above_median and not bc_above_median:
+            return 'Below Median (Temperature and Black Carbon)'
+        elif temp_above_median and not bc_above_median:
+            return 'Above Median (Temp)'
+        else:  # bc_above_median and not temp_above_median
+            return 'Above Median (Black Carbon)'
+    
+    gdf_benefits['benefit_category'] = gdf_benefits.apply(classify_benefits, axis=1)
+    
+    # Create country color mapping
+    country_color_map = {
+        'MALAYSIA': '#AAA662',  
+        'CAMBODIA': '#029386',  
+        'INDONESIA': '#FF6347', 
+        'VIETNAM': '#DAA520'    
+    }
+    countries = country_color_map.keys()
+    gdf_benefits['country_color'] = gdf_benefits['country'].map(country_color_map)
+    
+    # Create the plot with manual positioning to ensure equal sizes
+    fig = plt.figure(figsize=figsize)
+
+    
+    # Create a GridSpec: 1 row, 3 columns with equal spacing
+    gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1], 
+                        hspace=0.3, wspace=0.3)
+
+    # All three plots in one row
+    ax1 = fig.add_subplot(gs[0])  # Left - BC benefit
+    ax2 = fig.add_subplot(gs[1])  # Center - Temperature benefit  
+    ax3 = fig.add_subplot(gs[2])  # Right - Categorical benefits
+
+    country_fill_color = 'lightgray'
+    country_edge_color = 'darkgray'
+
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+
+    # After creating your three axes (ax1, ax2, ax3), add this code:
+
+    # Plot 1: BC benefit per MW (first plot) - without automatic colorbar
+    country_df.plot(ax=ax1, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+
+    scatter1 = gdf_benefits.plot(ax=ax1, column='bc_benefit_per_mw', cmap='Greens', 
+                                markersize=30, legend=False, vmin=0, vmax=gdf_benefits['bc_benefit_per_mw'].max()*0.8,
+                                edgecolor='black', linewidth=0.5)
+
+    # Create colorbar for first plot
+    divider1 = make_axes_locatable(ax1)
+    cax1 = divider1.append_axes("right", size="5%", pad=0.1)
+    norm1 = Normalize(vmin=0, vmax=gdf_benefits['bc_benefit_per_mw'].max()*0.8)
+    sm1 = ScalarMappable(norm=norm1, cmap='Greens')
+    cbar1 = plt.colorbar(sm1, cax=cax1)
+    cbar1.set_label('Black Carbon Benefit\n(ng/m³/MW)', fontsize=14)
+
+    #ax1.set_title('Air Quality Benefit per MW', fontsize=14)
+    ax1.set_xlim(90, 150)
+    ax1.set_ylim(-15, 30)
+    ax1.set_xticklabels([])
+    ax1.set_yticklabels([])
+
+    # Plot 2: Temperature benefit per MW (second plot) - without automatic colorbar
+    country_df.plot(ax=ax2, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+
+    scatter2 = gdf_benefits.plot(ax=ax2, column='temp_benefit_per_mw', cmap='Blues',
+                                markersize=30, legend=False, vmin=0, vmax=gdf_benefits['temp_benefit_per_mw'].max()*0.8,
+                                edgecolor='black', linewidth=0.5)
+
+    # Create colorbar for second plot
+    divider2 = make_axes_locatable(ax2)
+    cax2 = divider2.append_axes("right", size="5%", pad=0.1)
+    norm2 = Normalize(vmin=0, vmax=gdf_benefits['temp_benefit_per_mw'].max()*0.8)
+    sm2 = ScalarMappable(norm=norm2, cmap='Blues')
+    cbar2 = plt.colorbar(sm2, cax=cax2)
+    cbar2.set_label('Temperature Benefit\n(K/MW)', fontsize=14)
+
+    #ax2.set_title('Temperature Benefit per MW', fontsize=14)
+    ax2.set_xlim(90, 150)
+    ax2.set_ylim(-15, 30)
+    ax2.set_xticklabels([])
+    ax2.set_yticklabels([])
+
+    # Plot 3: Categorical benefits (third plot) - with invisible colorbar for alignment
+    country_df.plot(ax=ax3, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
+
+    # Define colors for each category
+    category_colors = {
+        'Above Median (Temperature and Black Carbon)': '#2E8B57',     
+        'Above Median (Black Carbon)': '#CD853F',      
+        'Above Median (Temp)': '#4169E1', 
+        'Below Median (Temperature and Black Carbon)': '#FF6347'    
+    }
+
+    # Plot categorical data...
+    for category, color in category_colors.items():
+        category_data = gdf_benefits[gdf_benefits['benefit_category'] == category]
+        if len(category_data) > 0:
+            category_data.plot(ax=ax3, color=color, markersize=30, 
+                            edgecolor='black', linewidth=0.5, label=category)
+
+    # Create invisible colorbar for third plot to maintain alignment
+    divider3 = make_axes_locatable(ax3)
+    cax3 = divider3.append_axes("right", size="5%", pad=0.1)
+    cax3.set_visible(False)  # Make it invisible
+
+   # ax3.set_title('Benefit Categories (Relative to Median)', fontsize=14)
+    ax3.set_xlim(90, 150)
+    ax3.set_ylim(-15, 30)
+    ax3.set_xticklabels([])
+    ax3.set_yticklabels([])
+
+    # Create custom legend for categorical plot with line breaks
+    from matplotlib.patches import Patch
+
+    # Create legend labels with line breaks
+    legend_labels = []
+    for category in category_colors.keys():
+        if 'Above Median (Temperature and Black Carbon)' in category:
+            legend_labels.append('Above Median\n(Temperature and Black Carbon)')
+        elif 'Below Median (Temperature and Black Carbon)' in category:
+            legend_labels.append('Below Median\n(Temperature and Black Carbon)')
+        elif 'Above Median (Temp)' in category:
+            legend_labels.append('Above Median\n(Temp)')
+        elif 'Above Median (Black Carbon)' in category:
+            legend_labels.append('Above Median\n(Black Carbon)')
+        else:
+            legend_labels.append(category)
+
+    legend_elements = [Patch(facecolor=color, edgecolor='black', label=label)
+                    for (category, color), label in zip(category_colors.items(), legend_labels)]
+    ax3.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(2.15
+                                                                           , 1.0), 
+            fontsize=14, frameon=True, title='Benefit Category')
+
+    # Add your legend for the third plot...
+    
+    # Print some statistics
+    print(f"\nPlant Benefits Summary:")
+    print(f"Number of plants: {len(gdf_benefits)}")
+    print(f"BC benefit per MW - Mean: {gdf_benefits['bc_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['bc_benefit_per_mw'].min():.2e} - {gdf_benefits['bc_benefit_per_mw'].max():.2e}")
+    print(f"Temp benefit per MW - Mean: {gdf_benefits['temp_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['temp_benefit_per_mw'].min():.2e} - {gdf_benefits['temp_benefit_per_mw'].max():.2e}")
+    print(f"Median BC benefit per MW: {median_bc:.2e}")
+    print(f"Median Temp benefit per MW: {median_temp:.2e}")
+    
+    # Print category counts
+    print(f"\nBenefit Category Counts:")
+    category_counts = gdf_benefits['benefit_category'].value_counts()
+    for category, count in category_counts.items():
+        print(f"{category}: {count} plants ({count/len(gdf_benefits)*100:.1f}%)")
+    
+    return fig, gdf_benefits
