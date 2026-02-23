@@ -1,0 +1,7 @@
+/tmp/slurmd/job423898/slurm_script: line 13: module: command not found
+Traceback (most recent call last):
+  File "/net/fs11/d0/emfreese/BC-IRF/analysis_plotting/videos_shutdowns.py", line 705, in <module>
+    create_difference_from_baseline_video(
+  File "/net/fs11/d0/emfreese/BC-IRF/analysis_plotting/videos_shutdowns.py", line 553, in create_difference_from_baseline_video
+    schedule = calculate_shutdown_schedule(
+NameError: name 'calculate_shutdown_schedule' is not defined

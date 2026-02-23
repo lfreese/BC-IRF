@@ -1,0 +1,5 @@
+/tmp/slurmd/job423561/slurm_script: line 13: module: command not found
+Traceback (most recent call last):
+  File "/net/fs11/d0/emfreese/BC-IRF/analysis_plotting/videos_shutdowns.py", line 1, in <module>
+    import xarray as xr
+ModuleNotFoundError: No module named 'xarray'

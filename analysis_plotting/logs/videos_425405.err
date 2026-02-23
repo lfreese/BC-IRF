@@ -1,0 +1,43 @@
+/tmp/slurmd/job425405/slurm_script: line 13: module: command not found
+Traceback (most recent call last):
+  File "/net/fs11/d0/emfreese/BC-IRF/analysis_plotting/videos_shutdowns.py", line 707, in <module>
+    create_difference_from_baseline_video(
+  File "/net/fs11/d0/emfreese/BC-IRF/analysis_plotting/videos_shutdowns.py", line 683, in create_difference_from_baseline_video
+    anim = FuncAnimation(fig, update, frames=n_frames, interval=1000/fps, blit=True)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 1679, in __init__
+    super().__init__(fig, **kwargs)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 1403, in __init__
+    super().__init__(fig, event_source=event_source, *args, **kwargs)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 868, in __init__
+    self._setup_blit()
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 1191, in _setup_blit
+    self._post_draw(None, self._blit)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 1146, in _post_draw
+    self._fig.canvas.draw_idle()
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/backend_bases.py", line 1905, in draw_idle
+    self.draw(*args, **kwargs)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/backends/backend_agg.py", line 387, in draw
+    self.figure.draw(self.renderer)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/artist.py", line 95, in draw_wrapper
+    result = draw(artist, renderer, *args, **kwargs)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/artist.py", line 72, in draw_wrapper
+    return draw(artist, renderer)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/figure.py", line 3169, in draw
+    DrawEvent("draw_event", self.canvas, renderer)._process()
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/backend_bases.py", line 1217, in _process
+    self.canvas.callbacks.process(self.name, self)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/cbook.py", line 303, in process
+    self.exception_handler(exc)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/cbook.py", line 87, in _exception_printer
+    raise exc
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/cbook.py", line 298, in process
+    func(*args, **kwargs)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 892, in _start
+    self._init_draw()
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 1733, in _init_draw
+    self._draw_frame(frame_data)
+  File "/home/emfreese/miniconda3/envs/bc-irf/lib/python3.9/site-packages/matplotlib/animation.py", line 1752, in _draw_frame
+    self._drawn_artists = self._func(framedata, *self._args)
+  File "/net/fs11/d0/emfreese/BC-IRF/analysis_plotting/videos_shutdowns.py", line 666, in update
+    title.set_text(f'{country_name} shuts down\n{strategy_names[strategy]}\n' +
+TypeError: set_text() got an unexpected keyword argument 'fontsize'

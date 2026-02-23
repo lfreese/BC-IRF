@@ -162,7 +162,7 @@ def plot_concentration_maps(conc_by_location, map_locations, shutdown_years,
             
             # Add hatching for emitting countries
             if location in ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']:
-                country_df[country_df['country'] == location.capitalize()].boundary.plot(
+                country_df[country_df['country'] == location.title()].boundary.plot(
                     ax=ax, 
                     color='k', 
                     linewidth=0.5, 
@@ -178,7 +178,7 @@ def plot_concentration_maps(conc_by_location, map_locations, shutdown_years,
             
             # Set titles and labels
             if row_idx == 0:
-                axes[0, col_idx].set_title(f'Emissions from {location.capitalize()}', 
+                axes[0, col_idx].set_title(f'Emissions from {location.title()}', 
                                          fontsize=18)
             if col_idx == 0:
                 axes[row_idx, 0].set_ylabel(f'Shutdown in {year}', 
@@ -298,7 +298,7 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
 
         # Add hatching for emitting countries
         if location in ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']:
-            country_df[country_df['country'] == location.capitalize()].boundary.plot(
+            country_df[country_df['country'] == location.title()].boundary.plot(
                 ax=ax, 
                 color='k', 
                 linewidth=0.5, 
@@ -313,7 +313,7 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
             )
         
         # Set titles and labels
-        ax.set_title(f'{location.capitalize()}', 
+        ax.set_title(f'{location.title()}', 
                    fontsize=16)
         
         # Set map extent
@@ -323,7 +323,7 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
         # Add subplot lettering
         subplot_letter = chr(ord('a') + col_idx)
         ax.text(0.04, 0.04, f'{subplot_letter})', transform=ax.transAxes, 
-                fontsize=16, fontweight='bold')
+                fontsize=16)
 
     # Create normalized data plots (bottom row)
     for col_idx, location in enumerate(map_locations):
@@ -348,7 +348,7 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
 
         # Add hatching for emitting countries
         if location in ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']:
-            country_df[country_df['country'] == location.capitalize()].boundary.plot(
+            country_df[country_df['country'] == location.title()].boundary.plot(
                 ax=ax, 
                 color='k', 
                 linewidth=0.5, 
@@ -363,7 +363,7 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
             )
         
         # Set titles and labels
-        ax.set_title(f'{location.capitalize()}', 
+        ax.set_title(f'{location.title()}', 
                    fontsize=16)
         
         # Set map extent
@@ -373,7 +373,7 @@ def plot_single_year_concentration_maps(conc_by_location, norm_conc_by_location,
         # Add subplot lettering
         subplot_letter = chr(ord('f') + col_idx)
         ax.text(0.04, 0.04, f'{subplot_letter})', transform=ax.transAxes, 
-                fontsize=16, fontweight='bold')
+                fontsize=16)
 
     
     # Add row labels
@@ -458,8 +458,12 @@ def plot_single_matrix(matrix_data, ax, variable, title_suffix=''):
     """
     # Format country names
     matrix_formatted = matrix_data.copy()
-    matrix_formatted.index = [country.capitalize() for country in matrix_data.index]
-    matrix_formatted.columns = [country.capitalize() for country in matrix_data.columns]
+    matrix_formatted.index = [country.title() for country in matrix_data.index]
+    matrix_formatted.columns = [country.title() for country in matrix_data.columns]
+    
+      
+    # Sort the index (y-axis, impacted countries) alphabetically
+    matrix_formatted = matrix_formatted.sort_index(ascending=True)
     
     # Set minimum value for log scale
     vmin = np.min(matrix_data.values[matrix_data.values > 0])
@@ -477,30 +481,30 @@ def plot_single_matrix(matrix_data, ax, variable, title_suffix=''):
     ax.xaxis.set_label_position('top')
     
     # Rotate x-axis labels
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    plt.setp(ax.get_xticklabels(),  ha='center')
     
     # Custom colorbar label
     cbar = ax.collections[0].colorbar
     
     # Custom colorbar label based on variable and normalization
     if 'pop_weight' in variable:
-        base_label = 'Population-weighted BC Concentration'
+        base_label = 'Population-weighted \nBlack Carbon Concentration'
         if 'Normalized' in title_suffix:
-            colorbar_label = f'Normalized {base_label} (μg/m³/g/yr)'
+            colorbar_label = f'Normalized {base_label} (ng/m³/g/yr)'
         else:
-            colorbar_label = f'{base_label} (μg/m³)'
+            colorbar_label = f'{base_label} (ng/m³)'
     elif 'surface' in variable:
-        base_label = 'Surface BC Concentration'
+        base_label = 'Surface \n Black Carbon Concentration'
         if 'Normalized' in title_suffix:
-            colorbar_label = f'Normalized {base_label} (μg/m³/g/yr)'
+            colorbar_label = f'Normalized {base_label} (ng/m³/g/yr)'
         else:
-            colorbar_label = f'{base_label} (μg/m³)'
+            colorbar_label = f'{base_label} (ng/m³)'
     elif 'column' in variable:
-        base_label = 'Column BC Concentration'
+        base_label = 'Column \n Black Carbon Concentration'
         if 'Normalized' in title_suffix:
-            colorbar_label = f'Normalized {base_label} (μg/m³/g/yr)'
+            colorbar_label = f'Normalized {base_label} (ng/m³/g/yr)'
         else:
-            colorbar_label = f'{base_label} (μg/m³)'
+            colorbar_label = f'{base_label} (ng/m³)'
     else:
         colorbar_label = f'{variable}'
     
@@ -521,10 +525,10 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
     
     # Define a colormap for source countries
     source_colors = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
+        'MALAYSIA': '#0072B2',  
+        'CAMBODIA': '#009E73',  
+        'INDONESIA': '#D55E00', 
+        'VIETNAM': '#CC79A7'    
     }
     
     # Check if the location is valid
@@ -540,8 +544,8 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=(
-            "a) Concentration (ng/m³)", 
-            "b) Concentration Normalized by Emissions (ng/m³/g/yr)" if has_norm_data else None,
+            "a) Concentration (ng/m³·person)", 
+            "b) Concentration Normalized by Emissions (ng/m³·person)/(g/yr)" if has_norm_data else None,
             "c) Temperature Impact (°C)" if has_temp_data else None,
             "d) Temperature Impact Normalized by Emissions (°C/g/yr)" if has_temp_norm_data else None
         ),
@@ -659,30 +663,16 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
             for country in source_countries:
                 if country in data_dict:
                     country_data = data_dict[country][year].copy()
-                    # Check if this is a temperature/radiative forcing variable
-                    is_temperature_var = any(temp_keyword in viz_variable.lower() 
-                                            for temp_keyword in ['drf_toa', 'snowrf_toa', 'sum_rf_toa', 
-                                                            'dt_drf', 'dt_snowrf', 'dt_sum', 'temperature'])
+                   
                     # Group by country_impacted and sum
-                    if isinstance(country_data, pd.DataFrame):
-                        if is_temperature_var: ## temperature impact is just the mean value for each country rather than summing across shapes (using global mean value)
-                            country_grouped = country_data.groupby(country_data.index)[viz_variable].mean().reset_index()
-                            country_grouped.columns = ['country_impacted', viz_variable]
-                        else: ## black carbon data is summed across multiple geo shapes for a country
-                            country_grouped = country_data.groupby(country_data.index)[viz_variable].sum().reset_index()
-                            country_grouped.columns = ['country_impacted', viz_variable]
-                    else:
-                        if isinstance(country_data, pd.DataFrame):
-                            country_grouped = country_data.reset_index()
-                            country_grouped = country_grouped.groupby('country_impacted')[viz_variable].mean().reset_index()
-                        else:
-                            country_grouped = country_data.reset_index()
-                            country_grouped = country_grouped.groupby('country_impacted')[viz_variable].sum().reset_index()
+                    country_grouped = country_data.groupby(country_data.index)[viz_variable].mean().reset_index()
+                    country_grouped.columns = ['country_impacted', viz_variable]
+                
                     # Filter to include top receptor countries and source countries if needed
                     target_list = top_receptors
                     if not allow_loops:
                         # Add source countries as potential targets
-                        target_list += [c.capitalize() for c in source_countries]
+                        target_list += [c.title() for c in source_countries]
                     country_grouped = country_grouped[country_grouped['country_impacted'].isin(target_list)]
                     
                     if not country_grouped.empty:
@@ -710,7 +700,7 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
             # For source countries that are also targets, create a separate "copy" node
             dual_role_nodes = {}
             for country in source_countries:
-                cap_country = country.capitalize()
+                cap_country = country.title()
                 if cap_country in target_nodes:
                     # Always create target-specific labels since we don't allow loops
                     dual_role_nodes[cap_country] = f"{cap_country} (recipient)"
@@ -895,170 +885,587 @@ def create_sankey_from_map_data(regular_data, norm_data=None, temp_data=None, te
     return fig, sankey_data
 
 
-def create_multi_source_sankey(regular_data, year=2040, variable='BC_pop_weight_mean_conc', top_n=10):
+# def create_multi_source_sankey(regular_data, year=2040, variable='BC_pop_weight_mean_conc', top_n=10):
+#     """
+#     Create four side-by-side Sankey diagrams, one for each source country,
+#     showing flows to all recipient countries except itself.
+    
+#     Parameters:
+#     -----------
+#     regular_data : dict
+#         Output from prepare_concentration_data function for regular data
+#     year : int
+#         Year to visualize
+#     variable : str
+#         Variable to visualize (e.g., 'BC_pop_weight_mean_conc')
+#     top_n : int
+#         Number of top receptor countries to include for each source
+    
+#     Returns:
+#     --------
+#     plotly.graph_objects.Figure
+#         Figure containing four Sankey diagrams
+#     """
+#     import plotly.graph_objects as go
+#     from plotly.subplots import make_subplots
+#     import numpy as np
+    
+#     # Define a colormap for source countries
+#     source_colors = {
+#         'MALAYSIA': '#0072B2',  
+#         'CAMBODIA': '#009E73',  
+#         'INDONESIA': '#D55E00', 
+#         'VIETNAM': '#CC79A7'    
+#     }
+    
+#     # Source countries to create diagrams for
+#     source_countries = ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']
+    
+#     # Create subplots - one for each source country
+#     fig = make_subplots(
+#         rows=1, cols=4,
+#         #subplot_titles=[f"From {country.title()}" for country in source_countries],
+#         specs=[[{"type": "sankey"} for _ in range(4)]],
+#         horizontal_spacing=0.4
+#     )
+    
+#     # Process each source country
+#     for col_idx, source_country in enumerate(source_countries):
+#         # Check if the source country is in the data
+#         if source_country not in regular_data:
+#             continue
+            
+#         # Get data for the specified year and source country
+#         try:
+#             data_df = regular_data[source_country][year].copy()
+            
+#             # Group by country_impacted and sum the values
+#             if isinstance(data_df, pd.DataFrame):
+#                 grouped_df = data_df.groupby(data_df.index)[variable].sum().reset_index()
+#                 grouped_df.columns = ['country_impacted', variable]
+#             else:
+#                 grouped_df = data_df.reset_index()
+#                 grouped_df = grouped_df.groupby('country_impacted')[variable].sum().reset_index()
+            
+#         except KeyError:
+#             continue
+        
+#         # Remove NaN values and the source country itself
+#         grouped_df = grouped_df.dropna(subset=[variable])
+#         grouped_df = grouped_df[grouped_df['country_impacted'] != source_country.title()]
+        
+#         if grouped_df.empty:
+#             continue
+        
+#         # Sort by impact and get top receptors
+#         top_receptors = grouped_df.sort_values(variable, ascending=False).head(top_n)
+        
+#         # Prepare data for Sankey diagram
+#         # Single source node
+#         source_node = source_country.title()
+#         target_nodes = top_receptors['country_impacted'].tolist()
+        
+#         # Create node list
+#         all_nodes = [source_node] + target_nodes
+        
+#         # Create node index mapping
+#         node_indices = {node: i for i, node in enumerate(all_nodes)}
+        
+#         # Create links
+#         sources = []
+#         targets = []
+#         values = []
+#         labels = []
+#         colors = []
+        
+#         source_idx = 0  # Source is always the first node
+        
+#         for _, row in top_receptors.iterrows():
+#             receptor = row['country_impacted']
+#             value = row[variable]
+            
+#             if np.isnan(value) or value <= 0:
+#                 continue
+                
+#             target_idx = node_indices[receptor]
+            
+#             sources.append(source_idx)
+#             targets.append(target_idx)
+#             values.append(value)
+            
+#             # Format label
+#             labels.append(f"{source_node} → {receptor}: {value:.2e}")
+            
+#             # Add color based on source country
+#             source_color = source_colors[source_country]
+#             # Convert to rgba with transparency
+#             rgba_color = f"rgba{tuple(int(source_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (0.7,)}"
+#             colors.append(rgba_color)
+        
+#         # Create node colors and labels
+#         node_colors = []
+#         node_labels = []
+        
+#         for node in all_nodes:
+#             node_labels.append(node)
+            
+#             if node == source_node:
+#                 node_colors.append(source_colors[source_country])
+#             else:
+#                 node_colors.append("gray")
+        
+#         # Create Sankey diagram
+#         sankey = go.Sankey(
+#             arrangement = 'snap',
+#             node = dict(
+#                 pad = 10,
+#                 thickness = 20,
+#                 line = dict(color = "black", width = 0.5),
+#                 label = node_labels,
+#                 color = node_colors
+#             ),
+#             link = dict(
+#                 source = sources,
+#                 target = targets,
+#                 value = values,
+#                 label = labels,
+#                 color = colors
+#             )
+#         )
+        
+#         # Add to subplot
+#         fig.add_trace(
+#             sankey,
+#             row=1, 
+#             col=col_idx + 1
+#         )
+    
+#     # Update layout
+#     fig.update_layout(
+#         font_size=10,
+#         height=500,
+#         width=1200,
+#         margin=dict(l=10, r=10, b=10, t=40)
+#     )
+    
+#     return fig
+def create_multi_source_sankey(regular_data, norm_data=None, temp_data=None, temp_norm_data=None,
+                              year=2040, variable='BC_pop_weight_mean_conc', 
+                              temp_variable='dt_sum', top_n=10):
     """
-    Create four side-by-side Sankey diagrams, one for each source country,
-    showing flows to all recipient countries except itself.
+    Create a 2x2 grid of Sankey diagrams:
+    - Top row: BC concentration (regular and normalized) showing flows to receptor countries
+    - Bottom row: Temperature (regular and normalized) showing flows to single "Global Impact" node
     
     Parameters:
     -----------
     regular_data : dict
-        Output from prepare_concentration_data function for regular data
+        BC concentration data (regular)
+    norm_data : dict, optional
+        BC concentration data (normalized)
+    temp_data : dict, optional
+        Temperature data (regular)
+    temp_norm_data : dict, optional
+        Temperature data (normalized)
     year : int
         Year to visualize
     variable : str
-        Variable to visualize (e.g., 'BC_pop_weight_mean_conc')
+        Variable for BC (e.g., 'BC_pop_weight_mean_conc')
+    temp_variable : str
+        Variable for temperature (e.g., 'dt_sum')
     top_n : int
-        Number of top receptor countries to include for each source
+        Number of top receptor countries for BC diagrams
     
     Returns:
     --------
-    plotly.graph_objects.Figure
-        Figure containing four Sankey diagrams
+    fig : plotly.graph_objects.Figure
+        Figure containing 2x2 grid of Sankey diagrams
+    sankey_data : dict
+        Dictionary containing the data used to create each Sankey diagram
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     import numpy as np
+    import pandas as pd
     
     # Define a colormap for source countries
     source_colors = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
+        'MALAYSIA': '#0072B2',  
+        'CAMBODIA': '#009E73',  
+        'INDONESIA': '#D55E00', 
+        'VIETNAM': '#CC79A7'    
     }
     
-    # Source countries to create diagrams for
     source_countries = ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']
     
-    # Create subplots - one for each source country
-    fig = make_subplots(
-        rows=1, cols=4,
-        #subplot_titles=[f"From {country.title()}" for country in source_countries],
-        specs=[[{"type": "sankey"} for _ in range(4)]],
-        horizontal_spacing=0.4
-    )
+    # Initialize data dictionary
+    sankey_data = {
+        'bc_regular': {},
+        'bc_normalized': {},
+        'temp_regular': {},
+        'temp_normalized': {}
+    }
     
-    # Process each source country
-    for col_idx, source_country in enumerate(source_countries):
-        # Check if the source country is in the data
-        if source_country not in regular_data:
+    # Determine which diagrams to show
+    has_norm_data = norm_data is not None
+    has_temp_data = temp_data is not None
+    has_temp_norm_data = temp_norm_data is not None
+    
+    # Create 2x2 subplots
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=(
+            "a) Concentration (ng/m³·person)", 
+            "b) Concentration Normalized by Emissions (ng/m³·person)/(g/yr)" if has_norm_data else None,
+            "c) Temperature Impact (°C)" if has_temp_data else None,
+            "d) Temperature Impact Normalized by Emissions (°C/g/yr)" if has_temp_norm_data else None
+        ),
+        specs=[
+            [{"type": "sankey"}, {"type": "sankey"}],
+            [{"type": "sankey"}, {"type": "sankey"}]
+        ],
+        horizontal_spacing=0.15,
+        vertical_spacing=0.15
+    )
+    # ========== TOP ROW: BC CONCENTRATION (regular and normalized) ==========
+    for col_idx, (bc_data, col_num, data_key) in enumerate([
+        (regular_data, 1, 'bc_regular'), 
+        (norm_data, 2, 'bc_normalized')
+    ]):
+        if bc_data is None:
             continue
-            
-        # Get data for the specified year and source country
+        
         try:
-            data_df = regular_data[source_country][year].copy()
-            
-            # Group by country_impacted and sum the values
-            if isinstance(data_df, pd.DataFrame):
-                grouped_df = data_df.groupby(data_df.index)[variable].sum().reset_index()
-                grouped_df.columns = ['country_impacted', variable]
-            else:
-                grouped_df = data_df.reset_index()
-                grouped_df = grouped_df.groupby('country_impacted')[variable].sum().reset_index()
-            
-        except KeyError:
-            continue
-        
-        # Remove NaN values and the source country itself
-        grouped_df = grouped_df.dropna(subset=[variable])
-        grouped_df = grouped_df[grouped_df['country_impacted'] != source_country.capitalize()]
-        
-        if grouped_df.empty:
-            continue
-        
-        # Sort by impact and get top receptors
-        top_receptors = grouped_df.sort_values(variable, ascending=False).head(top_n)
-        
-        # Prepare data for Sankey diagram
-        # Single source node
-        source_node = source_country.title()
-        target_nodes = top_receptors['country_impacted'].tolist()
-        
-        # Create node list
-        all_nodes = [source_node] + target_nodes
-        
-        # Create node index mapping
-        node_indices = {node: i for i, node in enumerate(all_nodes)}
-        
-        # Create links
-        sources = []
-        targets = []
-        values = []
-        labels = []
-        colors = []
-        
-        source_idx = 0  # Source is always the first node
-        
-        for _, row in top_receptors.iterrows():
-            receptor = row['country_impacted']
-            value = row[variable]
-            
-            if np.isnan(value) or value <= 0:
+            # Get top receptors from 'all' data
+            if 'all' not in bc_data:
                 continue
                 
-            target_idx = node_indices[receptor]
-            
-            sources.append(source_idx)
-            targets.append(target_idx)
-            values.append(value)
-            
-            # Format label
-            labels.append(f"{source_node} → {receptor}: {value:.2e}")
-            
-            # Add color based on source country
-            source_color = source_colors[source_country]
-            # Convert to rgba with transparency
-            rgba_color = f"rgba{tuple(int(source_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (0.7,)}"
-            colors.append(rgba_color)
-        
-        # Create node colors and labels
-        node_colors = []
-        node_labels = []
-        
-        for node in all_nodes:
-            node_labels.append(node)
-            
-            if node == source_node:
-                node_colors.append(source_colors[source_country])
+            all_data_df = bc_data['all'][year].copy()
+            if isinstance(all_data_df, pd.DataFrame):
+                all_grouped_df = all_data_df.groupby(all_data_df.index)[variable].mean().reset_index()
+                all_grouped_df.columns = ['country_impacted', variable]
             else:
-                node_colors.append("gray")
-        
-        # Create Sankey diagram
-        sankey = go.Sankey(
-            arrangement = 'snap',
-            node = dict(
-                pad = 10,
-                thickness = 20,
-                line = dict(color = "black", width = 0.5),
-                label = node_labels,
-                color = node_colors
-            ),
-            link = dict(
-                source = sources,
-                target = targets,
-                value = values,
-                label = labels,
-                color = colors
+                all_grouped_df = all_data_df.reset_index()
+                all_grouped_df = all_grouped_df.groupby('country_impacted')[variable].mean().reset_index()
+            
+            all_grouped_df = all_grouped_df.dropna(subset=[variable])
+            
+            # Get top receptor countries (NOT excluding source countries)
+            top_receptors = all_grouped_df.sort_values(variable, ascending=False).head(top_n)
+            receptor_countries = top_receptors['country_impacted'].tolist()
+            
+            # Now collect data for each source country
+            all_sources = []
+            all_targets = []
+            all_values = []
+            all_labels = []
+            all_colors = []
+            
+            # Create nodes list - source countries
+            source_nodes = [c.title() for c in source_countries if c in bc_data]
+            
+            # Identify which receptor countries are also source countries (need dual role nodes)
+            dual_role_nodes = {}
+            for country in source_countries:
+                cap_country = country.title()
+                if cap_country in receptor_countries:
+                    # Create a separate recipient node for this source country
+                    dual_role_nodes[cap_country] = f"{cap_country} (recipient)"
+            
+            # Build all_nodes list
+            all_nodes = source_nodes.copy()
+            
+            # Add receptor nodes (using dual role mapping where needed)
+            for receptor in receptor_countries:
+                if receptor in [c.title() for c in source_countries]:
+                    # This is a source country that's also a receptor - use the mapped version
+                    all_nodes.append(dual_role_nodes.get(receptor, receptor))
+                elif receptor not in all_nodes:
+                    all_nodes.append(receptor)
+            
+            # Create node index mapping
+            node_indices = {}
+            for i, node in enumerate(all_nodes):
+                if '(recipient)' in node:
+                    # Map both the display name and the internal name
+                    original_name = node.split(' (recipient)')[0]
+                    node_indices[original_name] = i
+                    node_indices[node] = i
+                elif node.upper() in source_countries:
+                    node_indices[node.upper()] = i
+                    node_indices[node] = i  # Also map capitalized version
+                else:
+                    node_indices[node] = i
+            
+            # Calculate total values for each node (incoming + outgoing)
+            node_values = {node: 0.0 for node in all_nodes}
+            
+            # First pass to calculate total values
+            for source_country in source_countries:
+                if source_country not in bc_data:
+                    continue
+                    
+                country_data = bc_data[source_country][year].copy()
+                
+                # Group by country_impacted
+                if isinstance(country_data, pd.DataFrame):
+                    country_grouped = country_data.groupby(country_data.index)[variable].mean().reset_index()
+                    country_grouped.columns = ['country_impacted', variable]
+                else:
+                    country_grouped = country_data.reset_index()
+                    country_grouped = country_grouped.groupby('country_impacted')[variable].mean().reset_index()
+                
+                # Filter to top receptors
+                country_grouped = country_grouped[country_grouped['country_impacted'].isin(receptor_countries)]
+                
+                # Sum outgoing values for source countries
+                source_title = source_country.title()
+                source_total = country_grouped[variable].sum()
+                node_values[source_title] += source_total
+                
+                # Sum incoming values for target countries
+                for _, row in country_grouped.iterrows():
+                    receptor = row['country_impacted']
+                    value = row[variable]
+                    
+                    if np.isnan(value) or value <= 0:
+                        continue
+                    
+                    # Use the dual role node if this receptor is also a source
+                    if receptor.upper() == source_country or receptor == source_title:
+                        # This would be a self-loop - use dual role node
+                        node_key = dual_role_nodes.get(receptor, receptor)
+                    else:
+                        node_key = receptor
+                    
+                    node_values[node_key] += value
+            
+            # Create links
+            for source_country in source_countries:
+                if source_country not in bc_data:
+                    continue
+                    
+                source_idx = node_indices[source_country]
+                country_data = bc_data[source_country][year].copy()
+                
+                # Group by country_impacted
+                if isinstance(country_data, pd.DataFrame):
+                    country_grouped = country_data.groupby(country_data.index)[variable].mean().reset_index()
+                    country_grouped.columns = ['country_impacted', variable]
+                else:
+                    country_grouped = country_data.reset_index()
+                    country_grouped = country_grouped.groupby('country_impacted')[variable].mean().reset_index()
+                
+                # Filter to top receptors
+                country_grouped = country_grouped[country_grouped['country_impacted'].isin(receptor_countries)]
+                
+                for _, row in country_grouped.iterrows():
+                    receptor = row['country_impacted']
+                    value = row[variable]
+                    
+                    if np.isnan(value) or value <= 0:
+                        continue
+                    
+                    # Check if this would be a self-loop
+                    source_title = source_country.title()
+                    if receptor.upper() == source_country or receptor == source_title:
+                        # Use the dual role node (never allow loops)
+                        target_idx = node_indices[dual_role_nodes.get(receptor, receptor)]
+                    else:
+                        # Regular target
+                        target_idx = node_indices[receptor]
+                    
+                    # Double check to ensure no self-loops
+                    if source_idx == target_idx:
+                        continue
+                    
+                    all_sources.append(source_idx)
+                    all_targets.append(target_idx)
+                    all_values.append(value)
+                    all_labels.append(f"{source_title} → {receptor}: {value:.2e}")
+                    
+                    # Color based on source
+                    source_color = source_colors[source_country]
+                    rgba_color = f"rgba{tuple(int(source_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (0.6,)}"
+                    all_colors.append(rgba_color)
+            
+            # Create node colors and labels
+            node_colors = []
+            node_labels = []
+            
+            for node in all_nodes:
+                # Get the display name
+                if '(recipient)' in node:
+                    display_name = node.split(' (recipient)')[0]
+                    node_labels.append(f"{display_name}")
+                else:
+                    node_labels.append(f"{node}")
+                
+                # Set the color
+                if node.upper() in source_colors or node.split(' ')[0].upper() in source_colors:
+                    country = node.upper() if node.upper() in source_colors else node.split(' ')[0].upper()
+                    node_colors.append(source_colors[country])
+                else:
+                    node_colors.append("gray")
+            
+            # Store data
+            sankey_data[data_key] = {
+                'nodes': all_nodes,
+                'node_labels': node_labels,
+                'node_colors': node_colors,
+                'sources': all_sources,
+                'targets': all_targets,
+                'values': all_values,
+                'labels': all_labels,
+                'colors': all_colors
+            }
+            
+            # Create Sankey
+            sankey = go.Sankey(
+                arrangement='snap',
+                node=dict(
+                    pad=15,
+                    thickness=20,
+                    line=dict(color="black", width=0.5),
+                    label=node_labels,
+                    color=node_colors
+                ),
+                link=dict(
+                    source=all_sources,
+                    target=all_targets,
+                    value=all_values,
+                    label=all_labels,
+                    color=all_colors
+                )
             )
-        )
+            
+            fig.add_trace(sankey, row=1, col=col_num)
+            
+        except Exception as e:
+            print(f"Error creating BC Sankey (col {col_num}): {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # ========== BOTTOM ROW: TEMPERATURE (regular and normalized) ==========
+    for col_idx, (t_data, col_num, data_key) in enumerate([
+        (temp_data, 1, 'temp_regular'), 
+        (temp_norm_data, 2, 'temp_normalized')
+    ]):
+        if t_data is None:
+            continue
         
-        # Add to subplot
-        fig.add_trace(
-            sankey,
-            row=1, 
-            col=col_idx + 1
-        )
+        try:
+            # Collect temperature contributions from each emitter
+            emitter_contributions = {}
+            
+            for source_country in source_countries:
+                if source_country not in t_data:
+                    continue
+                
+                data_df = t_data[source_country][year].copy()
+                
+                # Group and take mean (global value)
+                if isinstance(data_df, pd.DataFrame):
+                    grouped_df = data_df.groupby(data_df.index)[temp_variable].mean().reset_index()
+                    grouped_df.columns = ['country_impacted', temp_variable]
+                else:
+                    grouped_df = data_df.reset_index()
+                    grouped_df = grouped_df.groupby('country_impacted')[temp_variable].mean().reset_index()
+                
+                grouped_df = grouped_df.dropna(subset=[temp_variable])
+                
+                if not grouped_df.empty:
+                    mean_temp = grouped_df[temp_variable].mean()
+                    emitter_contributions[source_country] = mean_temp
+            
+            # Create nodes: Source countries + Global Impact
+            source_nodes = [c.title() for c in source_countries if c in emitter_contributions]
+            global_node = ['Global Temperature Impact']
+            all_nodes = source_nodes + global_node
+            
+            node_indices = {node: i for i, node in enumerate(all_nodes)}
+            global_idx = len(source_nodes)
+            
+            total_global_temp = sum(emitter_contributions.values())
+            
+            # Create links: Emitters → Global Impact
+            sources = []
+            targets = []
+            values = []
+            labels = []
+            colors = []
+            
+            for source_country in source_nodes:
+                country_upper = source_country.upper()
+                if country_upper in emitter_contributions:
+                    source_idx = node_indices[source_country]
+                    temp_contribution = emitter_contributions[country_upper]
+                    
+                    sources.append(source_idx)
+                    targets.append(global_idx)
+                    values.append(temp_contribution)
+                    labels.append(f"{source_country} → Global: {temp_contribution:.2e} K")
+                    
+                    source_color = source_colors[country_upper]
+                    rgba_color = f"rgba{tuple(int(source_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (0.6,)}"
+                    colors.append(rgba_color)
+            
+            # Store data
+            sankey_data[data_key] = {
+                'nodes': all_nodes,
+                'links': {
+                    'sources': [all_nodes[s] for s in sources],
+                    'targets': [all_nodes[t] for t in targets],
+                    'values': values
+                },
+                'contributions': emitter_contributions,
+                'total_global_temp': total_global_temp
+            }
+            
+            # Node colors
+            node_colors = []
+            for node in all_nodes:
+                if node.upper() in source_colors:
+                    node_colors.append(source_colors[node.upper()])
+                elif node == 'Global Temperature Impact':
+                    node_colors.append('#CC2936')  # Red
+                else:
+                    node_colors.append('gray')
+            
+            # Create Sankey
+            sankey = go.Sankey(
+                arrangement='snap',
+                node=dict(
+                    pad=15,
+                    thickness=30,
+                    line=dict(color="black", width=0.5),
+                    label=all_nodes,
+                    color=node_colors
+                ),
+                link=dict(
+                    source=sources,
+                    target=targets,
+                    value=values,
+                    label=labels,
+                    color=colors
+                )
+            )
+            
+            fig.add_trace(sankey, row=2, col=col_num)
+            
+        except Exception as e:
+            print(f"Error creating Temperature Sankey (col {col_num}): {e}")
     
     # Update layout
     fig.update_layout(
-        font_size=10,
-        height=500,
-        width=1200,
-        margin=dict(l=10, r=10, b=10, t=40)
+        font_size=12,
+        height=900,
+        width=1400,
+        margin=dict(l=50, r=50, b=50, t=80)
     )
     
-    return fig
+    return fig, sankey_data
+
 def analyze_emissions_by_var(full_ds, var, country= None):
     """
     Analyze emissions by progressively including plants sorted by commissioning year.
@@ -1442,12 +1849,14 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
     import numpy as np
     import matplotlib.pyplot as plt
     
+    tcr = np.round(float(tcr), 2)
+
     # Define default colors for countries if not provided
-    default_colors = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
+    default_colors =  {
+        'MALAYSIA': '#0072B2',  
+        'CAMBODIA': '#009E73',  
+        'INDONESIA': '#D55E00', 
+        'VIETNAM': '#CC79A7'    
     }
     
     # Use provided colors or default to the predefined set
@@ -1459,7 +1868,7 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
             if name == 'US':
                 return 'United States'
             else:
-                return name.capitalize()
+                return name.title()
         return name
     
     # Set up time array
@@ -1602,7 +2011,7 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
     
     # Plot the central estimate
     ax_co2_temp.plot(time_array, co2_temp_response,
-            color=co2_temp_color, linewidth=2, label = 'TCR = 1.65$\circ$C/1000GtCO2')
+            color=co2_temp_color, linewidth=2, label = f'TCR = {tcr:.2f}$\circ$C/1000GtCO2')
     
     # First plot the lifetime uncertainty (if enabled)
     if show_lifetime_uncertainty:
@@ -1611,9 +2020,9 @@ def plot_emissions_and_temperature(CGP_df, start_year=2000, end_year=2060, tcr=1
         max_combined = max_cumulative * ((tcr + tcr_uncertainty) / 1000)  # Max lifetime, max TCR
         
         # Plot outline of the combined uncertainty range
-        ax_co2_temp.plot(time_array, min_combined, color= "#206AB4", linestyle='--', linewidth=2, label = 'TCR = 1.25$\circ$C/1000GtCO2')
-        ax_co2_temp.plot(time_array, max_combined, color= "#20AFB4", linestyle='--', linewidth=2,  label = 'TCR = 2.05$\circ$C/1000GtCO2')
-    
+        ax_co2_temp.plot(time_array, min_combined, color= "#206AB4", linestyle='--', linewidth=2, label = f'TCR = {(tcr - tcr_uncertainty):.2f}$\circ$C/1000GtCO2')
+        ax_co2_temp.plot(time_array, max_combined, color= "#20AFB4", linestyle='--', linewidth=2,  label = f'TCR = {(tcr + tcr_uncertainty):.2f}$\circ$C/1000GtCO2')
+
         # Calculate temperature response for min/max emissions with central TCR
         min_temp_response = min_cumulative * (tcr / 1000)
         max_temp_response = max_cumulative * (tcr / 1000)
@@ -1678,18 +2087,20 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
     
     # Define color mapping for countries
     source_colors = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
+        'MALAYSIA': '#0072B2',  
+        'CAMBODIA': '#009E73',  
+        'INDONESIA': '#D55E00', 
+        'VIETNAM': '#CC79A7'    
     }
     
     # Function to format country names
     def format_country_name(name):
         if isinstance(name, str):
-            return name.capitalize()
+            return name.title()
         return name
     
+    tcr = np.round(float(tcr), 2)
+
     # Set up time array
     years = end_year - start_year
     time_array = np.arange(start_year, end_year)
@@ -1937,7 +2348,7 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
 
     # Plot the central estimate
     ax_co2_temp.plot(time_array, co2_temp_response,
-            color=co2_temp_color, linewidth=2, label = 'TCR = 1.65$\circ$C/1000GtCO2')
+            color=co2_temp_color, linewidth=2, label = f'TCR = {tcr:.2f}$\circ$C/1000GtCO2')
     
     # First plot the lifetime uncertainty (if enabled)
     if show_lifetime_uncertainty:
@@ -1946,9 +2357,9 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
         max_combined = max_cumulative * ((tcr + tcr_uncertainty) / 1000)  # Max lifetime, max TCR
         
         # Plot outline of the combined uncertainty range
-        ax_co2_temp.plot(time_array, min_combined, color= "#206AB4", linestyle='--', linewidth=2, label = 'TCR = 1.25$\circ$C/1000GtCO2')
-        ax_co2_temp.plot(time_array, max_combined, color= "#20AFB4", linestyle='--', linewidth=2,  label = 'TCR = 2.05$\circ$C/1000GtCO2')
-    
+        ax_co2_temp.plot(time_array, min_combined, color= "#206AB4", linestyle='--', linewidth=2, label = f'TCR = {(tcr - tcr_uncertainty):.2f}$\circ$C/1000GtCO2')
+        ax_co2_temp.plot(time_array, max_combined, color= "#20AFB4", linestyle='--', linewidth=2,  label = f'TCR = {tcr + tcr_uncertainty}$\circ$C/1000GtCO2')
+
         # Calculate temperature response for min/max emissions with central TCR
         min_temp_response = min_cumulative * (tcr / 1000)
         max_temp_response = max_cumulative * (tcr / 1000)
@@ -2051,7 +2462,7 @@ def plot_emissions_and_temperature_with_bc_artp(CGP_df, start_year=2000, end_yea
     
     ax_bc_temp.set_xlabel('Year')
     ax_bc_temp.set_ylabel('Cumulative Temperature Response (°C)')
-    ax_bc_temp.set_title('d) BC Temperature Impact')
+    ax_bc_temp.set_title('d) Black Carbon Temperature Impact')
     ax_bc_temp.grid(True, alpha=0.3)
     ax_bc_temp.legend(loc='upper left', fontsize='small')
     
@@ -2098,18 +2509,20 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
     import numpy as np
     import matplotlib.pyplot as plt
     
+    tcr = np.round(float(tcr), 2)
+
     # Define color mapping for countries
     source_colors = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
+        'MALAYSIA': '#0072B2',  
+        'CAMBODIA': '#009E73',  
+        'INDONESIA': '#D55E00', 
+        'VIETNAM': '#CC79A7'    
     }
     
     # Function to format country names
     def format_country_name(name):
         if isinstance(name, str):
-            return name.capitalize()
+            return name.title()
         return name
     
     # Set up time array
@@ -2313,7 +2726,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
 
     # Plot the central estimate
     ax_co2_temp.plot(time_array, co2_temp_response,
-            color=co2_temp_color, linewidth=2, label = 'TCR = 1.65$\circ$C/1000GtCO2')
+            color=co2_temp_color, linewidth=2, label = f'TCR = {tcr:.2f}$\circ$C/1000GtCO2')
     
     # First plot the lifetime uncertainty (if enabled)
     if show_lifetime_uncertainty:
@@ -2322,9 +2735,9 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
         max_combined = max_cumulative * ((tcr + tcr_uncertainty) / 1000)  # Max lifetime, max TCR
         
         # Plot outline of the combined uncertainty range
-        ax_co2_temp.plot(time_array, min_combined, color= "#206AB4", linestyle='--', linewidth=2, label = 'TCR = 1.25$\circ$C/1000GtCO2')
-        ax_co2_temp.plot(time_array, max_combined, color= "#20AFB4", linestyle='--', linewidth=2,  label = 'TCR = 2.05$\circ$C/1000GtCO2')
-    
+        ax_co2_temp.plot(time_array, min_combined, color= "#206AB4", linestyle='--', linewidth=2, label = f'TCR = {(tcr - tcr_uncertainty):.2f}$\circ$C/1000GtCO2')
+        ax_co2_temp.plot(time_array, max_combined, color= "#20AFB4", linestyle='--', linewidth=2,  label = f'TCR = {tcr + tcr_uncertainty}$\circ$C/1000GtCO2')
+
         # Calculate temperature response for min/max emissions with central TCR
         min_temp_response = min_cumulative * (tcr / 1000)
         max_temp_response = max_cumulative * (tcr / 1000)
@@ -2440,7 +2853,7 @@ def plot_emissions_and_temperature_with_bc(CGP_df, start_year=2000, end_year=206
     
     ax_bc_temp.set_xlabel('Year')
     ax_bc_temp.set_ylabel('Cumulative Temperature Response (°C)')
-    ax_bc_temp.set_title('d) BC Temperature Impact')
+    ax_bc_temp.set_title('d) Black Carbon Temperature Impact')
     ax_bc_temp.grid(True, alpha=0.3)
     ax_bc_temp.legend(loc='upper left', fontsize='small')
 
@@ -2495,6 +2908,9 @@ def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=203
     tuple
         Contains arrays for emissions and temperature impacts for both baseline and early shutdown scenarios
     """
+
+    tcr = np.round(float(tcr), 2)
+
     # Set up time array
     years = end_year - start_year
     time_array = np.arange(start_year, end_year)
@@ -2817,7 +3233,7 @@ def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=203
     ax_co2_emissions.axvline(x=shutdown_year, color='red', linestyle='--', alpha=0.7)
     
     ax_co2_emissions.set_ylabel(r'Cumulative CO$_2$ Emissions (GtCO$_2$)')
-    ax_co2_emissions.set_title(r'CO$_2$ Emissions', fontweight='bold')
+    ax_co2_emissions.set_title(r'CO$_2$ Emissions')
     ax_co2_emissions.grid(True, alpha=0.3)
     ax_co2_emissions.legend(loc='upper left', fontsize='small')
     
@@ -2855,7 +3271,7 @@ def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=203
     
     ax_co2_temp.set_xlabel('Year')
     ax_co2_temp.set_ylabel('Temperature Response (°C)')
-    ax_co2_temp.set_title(r'CO$_2$ Temperature Impact', fontweight='bold')
+    ax_co2_temp.set_title(r'CO$_2$ Temperature Impact')
     ax_co2_temp.grid(True, alpha=0.3)
     ax_co2_temp.legend(loc='upper left', fontsize='small')
     
@@ -2890,7 +3306,7 @@ def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=203
     ax_bc_emissions.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
     
     ax_bc_emissions.set_ylabel('Cumulative Black Carbon Emissions (g)')
-    ax_bc_emissions.set_title('Black Carbon Emissions', fontweight='bold')
+    ax_bc_emissions.set_title('Black Carbon Emissions')
     ax_bc_emissions.grid(True, alpha=0.3)
     ax_bc_emissions.legend(loc='upper left', fontsize='small')
     
@@ -2936,7 +3352,7 @@ def plot_emissions_and_temperature_with_early_shutdown(CGP_df, shutdown_year=203
     
     ax_bc_temp.set_xlabel('Year')
     ax_bc_temp.set_ylabel('Cumulative Temperature Response (°C)')
-    ax_bc_temp.set_title('BC Temperature Impact', fontweight='bold')
+    ax_bc_temp.set_title('BC Temperature Impact')
     ax_bc_temp.grid(True, alpha=0.3)
     ax_bc_temp.legend(loc='upper left', fontsize='small')
     
@@ -3167,7 +3583,7 @@ def compare_individual_strategies_and_rates(scenario_ds, rates=[1.0, 2.0, 4.0],
         axs[row].grid(True, linestyle='--', alpha=0.5)
     
     axs[0].set_ylabel('Capacity (GW)')
-    axs[1].set_ylabel(f'BC Concentration (ng/m³)')
+    axs[1].set_ylabel(f'Black Carbon Concentration (ng/m³)')
     axs[2].set_ylabel('Cumulative CO₂ (Gt)')
     axs[2].set_xlabel('Year')
 
@@ -3476,7 +3892,7 @@ def compare_multi_country_strategies_and_rates(scenario_ds, countries=['MALAYSIA
             # Add subplot lettering
             subplot_letter = chr(ord('a') + row * len(countries) + col)
             axs[row, col].text(0.04, 0.93, f'{subplot_letter})', transform=axs[row, col].transAxes, 
-                              fontsize=14, fontweight='bold')
+                              fontsize=14)
     
     # Set the x limits
     for row in range(3):
@@ -3550,480 +3966,9 @@ def compare_multi_country_strategies_and_rates(scenario_ds, countries=['MALAYSIA
 
     return fig, axs, country_data
 
-
-
-def plot_plant_benefits_per_capacity_map3(single_year_ds, CGP_df, country_df,
-                                        impact_var='BC_pop_weight_mean_conc',
-                                        tcr=1.65, figsize=(18, 8)):
+def prepare_plant_benefits_data(single_year_ds, CGP_df, impact_var='BC_pop_weight_mean_conc', tcr=1.65, current_year=2025):
     """
-    Plot BC concentration benefit vs temperature benefit per MW for each coal plant on a map
-    """
-    from shapely.geometry import Point
-    import geopandas as gpd
-    import matplotlib.colors as mcolors
-    
-    # Calculate benefits per MW for each plant
-    plant_benefits = []
-    
-    for unique_id in single_year_ds.unique_ID.values:
-        plant_data = single_year_ds.sel(unique_ID=unique_id)
-        plant_info = CGP_df.loc[CGP_df.index == unique_id]
-        
-        if len(plant_info) > 0:
-            # Get plant capacity in MW
-            capacity_mw = plant_data['MW'].values.item()
-            
-            if capacity_mw > 0:  # Only include plants with capacity
-                # Air quality benefit per MW (ng/m³ per MW)
-                bc_benefit_per_mw = plant_data[impact_var].sum('country_impacted').mean('scenario_year').values.item() / capacity_mw
-                
-                # Temperature benefit per MW
-                # CO2 component - direct marginal calculation
-                co2_emissions_gt = plant_data['co2_emissions'].mean('scenario_year').values.item() / 1e9  # Gt CO2/yr
-                # TCR: approximately 1.65 K per 1000 Gt CO2 (for marginal emissions)
-                co2_temp_k = tcr * co2_emissions_gt / 1000  # K per year from CO2
-                
-                # BC component
-                bc_temp_k = plant_data['dt_sum'].mean('scenario_year').values.item()
-                
-                # Total temperature per MW
-                total_temp_per_mw = (co2_temp_k + bc_temp_k) / capacity_mw
-
-                plant_benefits.append({
-                    'unique_ID': unique_id,
-                    'latitude': plant_info['latitude'].iloc[0],
-                    'longitude': plant_info['longitude'].iloc[0],
-                    'country': plant_info['COUNTRY'].iloc[0],
-                    'capacity_mw': capacity_mw,
-                    'bc_benefit_per_mw': bc_benefit_per_mw,
-                    'temp_benefit_per_mw': total_temp_per_mw
-                })
-    
-    # Convert to GeoDataFrame
-    benefits_df = pd.DataFrame(plant_benefits)
-    geometry = [Point(xy) for xy in zip(benefits_df['longitude'], benefits_df['latitude'])]
-    gdf_benefits = gpd.GeoDataFrame(benefits_df, geometry=geometry)
-    
-    # Calculate median values for categorization
-    median_temp = gdf_benefits['temp_benefit_per_mw'].median()
-    median_bc = gdf_benefits['bc_benefit_per_mw'].median()
-    
-    # Create categorical benefit classification
-    def classify_benefits(row):
-        temp_above_median = row['temp_benefit_per_mw'] > median_temp
-        bc_above_median = row['bc_benefit_per_mw'] > median_bc
-        
-        if temp_above_median and bc_above_median:
-            return 'Above Median (Temperature and Black Carbon)'
-        elif not temp_above_median and not bc_above_median:
-            return 'Below Median (Temperature and Black Carbon)'
-        elif temp_above_median and not bc_above_median:
-            return 'Above Median (Temp)'
-        else:  # bc_above_median and not temp_above_median
-            return 'Above Median (Black Carbon)'
-    
-    gdf_benefits['benefit_category'] = gdf_benefits.apply(classify_benefits, axis=1)
-    
-    # Create country color mapping
-    country_color_map = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
-    }
-    countries = country_color_map.keys()
-    gdf_benefits['country_color'] = gdf_benefits['country'].map(country_color_map)
-    
-    # Create the plot with manual positioning to ensure equal sizes
-    fig = plt.figure(figsize=figsize)
-
-    
-    # Create a GridSpec: 1 row, 3 columns with equal spacing
-    gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1], 
-                        hspace=0.3, wspace=0.3)
-
-    # All three plots in one row
-    ax1 = fig.add_subplot(gs[0])  # Left - BC benefit
-    ax2 = fig.add_subplot(gs[1])  # Center - Temperature benefit  
-    ax3 = fig.add_subplot(gs[2])  # Right - Categorical benefits
-
-    country_fill_color = 'lightgray'
-    country_edge_color = 'darkgray'
-
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    from matplotlib.cm import ScalarMappable
-    from matplotlib.colors import Normalize
-
-    # After creating your three axes (ax1, ax2, ax3), add this code:
-
-    # Plot 1: BC benefit per MW (first plot) - without automatic colorbar
-    country_df.plot(ax=ax1, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
-
-    scatter1 = gdf_benefits.plot(ax=ax1, column='bc_benefit_per_mw', cmap='Greens', 
-                                markersize=30, legend=False, vmin=0, vmax=gdf_benefits['bc_benefit_per_mw'].max()*0.8,
-                                edgecolor='black', linewidth=0.5)
-
-    # Create colorbar for first plot
-    divider1 = make_axes_locatable(ax1)
-    cax1 = divider1.append_axes("right", size="5%", pad=0.1)
-    norm1 = Normalize(vmin=0, vmax=gdf_benefits['bc_benefit_per_mw'].max()*0.8)
-    sm1 = ScalarMappable(norm=norm1, cmap='Greens')
-    cbar1 = plt.colorbar(sm1, cax=cax1)
-    cbar1.set_label('Black Carbon Benefit\n(ng/m³/MW)', fontsize=14)
-
-    #ax1.set_title('Air Quality Benefit per MW', fontsize=14)
-    ax1.set_xlim(90, 150)
-    ax1.set_ylim(-15, 30)
-    ax1.set_xticklabels([])
-    ax1.set_yticklabels([])
-
-    # Plot 2: Temperature benefit per MW (second plot) - without automatic colorbar
-    country_df.plot(ax=ax2, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
-
-    scatter2 = gdf_benefits.plot(ax=ax2, column='temp_benefit_per_mw', cmap='Blues',
-                                markersize=30, legend=False, vmin=0, vmax=gdf_benefits['temp_benefit_per_mw'].max()*0.8,
-                                edgecolor='black', linewidth=0.5)
-
-    # Create colorbar for second plot
-    divider2 = make_axes_locatable(ax2)
-    cax2 = divider2.append_axes("right", size="5%", pad=0.1)
-    norm2 = Normalize(vmin=0, vmax=gdf_benefits['temp_benefit_per_mw'].max()*0.8)
-    sm2 = ScalarMappable(norm=norm2, cmap='Blues')
-    cbar2 = plt.colorbar(sm2, cax=cax2)
-    cbar2.set_label('Temperature Benefit\n(K/MW)', fontsize=14)
-
-    #ax2.set_title('Temperature Benefit per MW', fontsize=14)
-    ax2.set_xlim(90, 150)
-    ax2.set_ylim(-15, 30)
-    ax2.set_xticklabels([])
-    ax2.set_yticklabels([])
-
-    # Plot 3: Categorical benefits (third plot) - with invisible colorbar for alignment
-    country_df.plot(ax=ax3, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
-
-    # Define colors for each category
-    category_colors = {
-        'Above Median (Temperature and Black Carbon)': '#2E8B57',     
-        'Above Median (Black Carbon)': '#CD853F',      
-        'Above Median (Temp)': '#4169E1', 
-        'Below Median (Temperature and Black Carbon)': '#FF6347'    
-    }
-
-    # Plot categorical data...
-    for category, color in category_colors.items():
-        category_data = gdf_benefits[gdf_benefits['benefit_category'] == category]
-        if len(category_data) > 0:
-            category_data.plot(ax=ax3, color=color, markersize=30, 
-                            edgecolor='black', linewidth=0.5, label=category)
-
-    # Create invisible colorbar for third plot to maintain alignment
-    divider3 = make_axes_locatable(ax3)
-    cax3 = divider3.append_axes("right", size="5%", pad=0.1)
-    cax3.set_visible(False)  # Make it invisible
-
-   # ax3.set_title('Benefit Categories (Relative to Median)', fontsize=14)
-    ax3.set_xlim(90, 150)
-    ax3.set_ylim(-15, 30)
-    ax3.set_xticklabels([])
-    ax3.set_yticklabels([])
-
-    # Create custom legend for categorical plot with line breaks
-    from matplotlib.patches import Patch
-
-    # Create legend labels with line breaks
-    legend_labels = []
-    for category in category_colors.keys():
-        if 'Above Median (Temperature and Black Carbon)' in category:
-            legend_labels.append('Above Median\n(Temperature and Black Carbon)')
-        elif 'Below Median (Temperature and Black Carbon)' in category:
-            legend_labels.append('Below Median\n(Temperature and Black Carbon)')
-        elif 'Above Median (Temp)' in category:
-            legend_labels.append('Above Median\n(Temp)')
-        elif 'Above Median (Black Carbon)' in category:
-            legend_labels.append('Above Median\n(Black Carbon)')
-        else:
-            legend_labels.append(category)
-
-    legend_elements = [Patch(facecolor=color, edgecolor='black', label=label)
-                    for (category, color), label in zip(category_colors.items(), legend_labels)]
-    ax3.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(2.15
-                                                                           , 1.0), 
-            fontsize=14, frameon=True, title='Benefit Category')
-
-    # Add your legend for the third plot...
-    
-    # Print some statistics
-    print(f"\nPlant Benefits Summary:")
-    print(f"Number of plants: {len(gdf_benefits)}")
-    print(f"BC benefit per MW - Mean: {gdf_benefits['bc_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['bc_benefit_per_mw'].min():.2e} - {gdf_benefits['bc_benefit_per_mw'].max():.2e}")
-    print(f"Temp benefit per MW - Mean: {gdf_benefits['temp_benefit_per_mw'].mean():.2e}, Range: {gdf_benefits['temp_benefit_per_mw'].min():.2e} - {gdf_benefits['temp_benefit_per_mw'].max():.2e}")
-    print(f"Median BC benefit per MW: {median_bc:.2e}")
-    print(f"Median Temp benefit per MW: {median_temp:.2e}")
-    
-    # Print category counts
-    print(f"\nBenefit Category Counts:")
-    category_counts = gdf_benefits['benefit_category'].value_counts()
-    for category, count in category_counts.items():
-        print(f"{category}: {count} plants ({count/len(gdf_benefits)*100:.1f}%)")
-    
-    return fig, gdf_benefits
-
-def bar_plot_topn(plant_benefits_gdf, single_year_ds, n = 30, save_path = False):
-    # Create enhanced ranked bar charts showing cross-category overlaps with consistent plant hatching
-    # Only hatch plants that appear in multiple plots
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(22, 16))
-    plt.rcParams['font.size'] = 14
-    # Get country colors
-    countries = plant_benefits_gdf['country'].unique()
-    country_color_map = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
-    }
-
-    # Calculate total lifetime impacts using the same methodology as per-MW calculations
-    plant_lifetime_years = 40  # Standard plant lifetime
-    tcr = 1.65  # Same TCR value used in the per-MW calculations
-
-    # For each plant, get the total BC and temperature benefits using consistent methodology
-    plant_benefits_gdf['total_bc_benefit_lifetime'] = 0.0
-    plant_benefits_gdf['total_temp_benefit_lifetime'] = 0.0
-
-    # Calculate lifetime benefits using the same approach as per-MW calculations
-    for idx, row in plant_benefits_gdf.iterrows():
-        plant_id = row['unique_ID']
-        
-        try:
-            plant_data = single_year_ds.sel(unique_ID=plant_id, scenario_year=2025)
-            
-            # BC benefit (same as before)
-            bc_data = plant_data['BC_pop_weight_mean_conc'].sum('country_impacted')
-            bc_impact = bc_data.item() * plant_lifetime_years
-            
-            # Temperature benefit - use same methodology as per-MW calculation
-            # CO2 component
-            co2_emissions_gt = plant_data['co2_emissions'].item() / 1e9  # Gt CO2/yr
-            co2_temp_k = tcr * co2_emissions_gt / 1000  # K per year from CO2
-            
-            # BC component
-            bc_temp_k = plant_data['dt_sum'].item()
-            
-            # Total temperature impact per year
-            total_temp_per_year = co2_temp_k + bc_temp_k
-            
-            # Lifetime temperature impact
-            temp_impact = total_temp_per_year * plant_lifetime_years
-            
-            plant_benefits_gdf.loc[idx, 'total_bc_benefit_lifetime'] = bc_impact
-            plant_benefits_gdf.loc[idx, 'total_temp_benefit_lifetime'] = temp_impact
-            
-        except Exception as e:
-            print(f"Error processing plant {plant_id}: {e}")
-            plant_benefits_gdf.loc[idx, 'total_bc_benefit_lifetime'] = 0.0
-            plant_benefits_gdf.loc[idx, 'total_temp_benefit_lifetime'] = 0.0
-
-    # Get top n plants for each category
-    top_bc_per_mw = plant_benefits_gdf.nlargest(n, 'bc_benefit_per_mw')
-    top_temp_per_mw = plant_benefits_gdf.nlargest(n, 'temp_benefit_per_mw')
-    top_bc_lifetime = plant_benefits_gdf.nlargest(n, 'total_bc_benefit_lifetime')
-    top_temp_lifetime = plant_benefits_gdf.nlargest(n, 'total_temp_benefit_lifetime')
-
-    # Get all unique plant indices that appear in any top n list
-    all_top_indices = set()
-    all_top_indices.update(top_bc_per_mw.index)
-    all_top_indices.update(top_temp_per_mw.index)
-    all_top_indices.update(top_bc_lifetime.index)
-    all_top_indices.update(top_temp_lifetime.index)
-
-    # Find plants that appear in multiple lists
-    appearances = {}
-    for plant_idx in all_top_indices:
-        appearances[plant_idx] = []
-        if plant_idx in top_bc_per_mw.index:
-            appearances[plant_idx].append('BC per-MW')
-        if plant_idx in top_temp_per_mw.index:
-            appearances[plant_idx].append('Temp per-MW')
-        if plant_idx in top_bc_lifetime.index:
-            appearances[plant_idx].append('BC lifetime')
-        if plant_idx in top_temp_lifetime.index:
-            appearances[plant_idx].append('Temp lifetime')
-
-    # Only assign hatch patterns to plants that appear in multiple lists
-    multi_list_plants = [plant_idx for plant_idx, lists in appearances.items() if len(lists) > 1]
-
-    # Create a consistent hatch pattern mapping only for plants that appear in multiple lists
-    hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', '...', 'xxx', 
-                    '^^^', '>>>', '<<<', '..', '--', '++', '**', '||', '//', '\\\\','ooo', '***']
-
-    # Extend pattern list if we have more plants than patterns
-    if len(multi_list_plants) > len(hatch_patterns):
-        hatch_patterns = hatch_patterns * (len(multi_list_plants) // len(hatch_patterns) + 1)
-
-    # Create a consistent mapping of plant index to hatch pattern (only for multi-list plants)
-    plant_hatch_map = {}
-    for i, plant_idx in enumerate(sorted(multi_list_plants)):
-        plant_hatch_map[plant_idx] = hatch_patterns[i]
-
-    # Function to get hatch pattern for a plant (returns None if plant appears in only one list)
-    def get_plant_hatch(plant_idx):
-        return plant_hatch_map.get(plant_idx, None)
-
-    # ====================== PLOTTING ======================
-
-    # BC benefits per MW plot (top left)
-    colors_bc_per_mw = [country_color_map[country] for country in top_bc_per_mw['country']]
-    hatches_bc_per_mw = [get_plant_hatch(idx) for idx in top_bc_per_mw.index]
-
-    bars1 = ax1.bar(range(len(top_bc_per_mw)), top_bc_per_mw['bc_benefit_per_mw'], 
-                    color=colors_bc_per_mw, alpha=0.8, hatch=hatches_bc_per_mw)
-    ax1.set_xlabel('Plant Rank (Highest to Lowest Impact)')
-    ax1.set_ylabel('BC Benefit per MW (μg/m³/MW)')
-    ax1.set_title(f'Top {n} Plants by BC Benefits per MW')
-    ax1.grid(True, alpha=0.3)
-
-    # Temperature benefits per MW plot (top right)
-    colors_temp_per_mw = [country_color_map[country] for country in top_temp_per_mw['country']]
-    hatches_temp_per_mw = [get_plant_hatch(idx) for idx in top_temp_per_mw.index]
-
-    bars2 = ax2.bar(range(len(top_temp_per_mw)), top_temp_per_mw['temp_benefit_per_mw'], 
-                    color=colors_temp_per_mw, alpha=0.8, hatch=hatches_temp_per_mw)
-    ax2.set_xlabel('Plant Rank (Highest to Lowest Impact)')
-    ax2.set_ylabel('Temperature Benefit per MW (K/MW)')
-    ax2.set_title(f'Top {n} Plants by Temperature Benefits per MW')
-    ax2.grid(True, alpha=0.3)
-
-    # BC lifetime benefits plot (bottom left)
-    colors_bc_lifetime = [country_color_map[country] for country in top_bc_lifetime['country']]
-    hatches_bc_lifetime = [get_plant_hatch(idx) for idx in top_bc_lifetime.index]
-
-    bars3 = ax3.bar(range(len(top_bc_lifetime)), top_bc_lifetime['total_bc_benefit_lifetime'], 
-                    color=colors_bc_lifetime, alpha=0.8, hatch=hatches_bc_lifetime)
-    ax3.set_xlabel('Plant Rank (Highest to Lowest Impact)')
-    ax3.set_ylabel('Total BC Benefit over 40-year Lifetime (μg/m³·years)')
-    ax3.set_title(f'Top {n} Plants by Total BC Benefits over 40-year Lifetime')
-    ax3.grid(True, alpha=0.3)
-    ax3.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
-
-    # Temperature lifetime benefits plot (bottom right)
-    colors_temp_lifetime = [country_color_map[country] for country in top_temp_lifetime['country']]
-    hatches_temp_lifetime = [get_plant_hatch(idx) for idx in top_temp_lifetime.index]
-
-    bars4 = ax4.bar(range(len(top_temp_lifetime)), top_temp_lifetime['total_temp_benefit_lifetime'], 
-                    color=colors_temp_lifetime, alpha=0.8, hatch=hatches_temp_lifetime)
-    ax4.set_xlabel('Plant Rank (Highest to Lowest Impact)')
-    ax4.set_ylabel('Total Temperature Benefit over 40-year Lifetime (K·years)')
-    ax4.set_title(f'Top {n} Plants by Total Temperature Benefits over 40-year Lifetime')
-    ax4.grid(True, alpha=0.3)
-    ax4.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
-
-    # ====================== LEGEND ======================
-    # Add country legend
-    legend_elements = []
-
-    # Add country colors - capitalize only first letter
-    for country in countries:
-        country_name = country.capitalize()  # Capitalize only first letter
-        legend_elements.append(plt.Rectangle((0,0),1,1, facecolor=country_color_map[country], 
-                                        label=country_name))
-
-    # Add separator
-    legend_elements.append(plt.Rectangle((0,0),1,1, facecolor='white', alpha=0, label=''))
-
-    # Add explanation for hatching
-    if multi_list_plants:
-        legend_elements.append(plt.Rectangle((0,0),1,1, facecolor='gray', hatch='///', 
-                                        alpha=0.8, label=f'Plants in multiple lists ({len(multi_list_plants)} plants)'))
-
-    # Place legend on the top right subplot
-    ax2.legend(handles=legend_elements,
-            bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=14)
-
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-
-    # ====================== ANALYSIS ======================
-    
-    print(f"\n{'='*80}")
-    print("MEDIAN VALUES")
-    print(f"{'='*80}")
-    print('Lifetime bc benefit median, all plants:', plant_benefits_gdf['total_bc_benefit_lifetime'].median())
-    print('Lifetime temp benefit median, all plants:', plant_benefits_gdf['total_temp_benefit_lifetime'].median())
-    print('BC/MW benefit median, all plants:', plant_benefits_gdf['bc_benefit_per_mw'].median())
-    print('Temp/MW benefit median, all plants:', plant_benefits_gdf['temp_benefit_per_mw'].median())
-
-    print(f"\n{'='*80}")
-    print(f"PLANT TRACKING ANALYSIS")
-    print(f"{'='*80}")
-
-    print(f"\nTotal unique plants appearing in any top-{n} list: {len(all_top_indices)}")
-    print(f"Plants appearing in multiple lists (hatched): {len(multi_list_plants)}")
-    print(f"Plants appearing in only one list (no hatch): {len(all_top_indices) - len(multi_list_plants)}")
-
-    # Count plants by number of appearances
-    appearance_counts = {}
-    for plant_idx, lists in appearances.items():
-        count = len(lists)
-        if count not in appearance_counts:
-            appearance_counts[count] = []
-        appearance_counts[count].append(plant_idx)
-
-    print(f"\nPlants by number of top-{n} list appearances:")
-    for count in sorted(appearance_counts.keys(), reverse=True):
-        plants = appearance_counts[count]
-        if count == 1:
-            print(f"\nPlants in {count} list ({len(plants)} plants - no hatching):")
-        else:
-            print(f"\nPlants in {count} lists ({len(plants)} plants - with hatching):")
-        
-        for plant_idx in plants[:15]:  # Show first 15 plants
-            plant_info = plant_benefits_gdf.loc[plant_idx]
-            lists_appeared = ", ".join(appearances[plant_idx])
-            if count > 1:
-                hatch = plant_hatch_map[plant_idx]
-                print(f"  Plant {plant_idx} ({plant_info['country']}, {hatch}): {lists_appeared}")
-            else:
-                print(f"  Plant {plant_idx} ({plant_info['country']}, no hatch): {lists_appeared}")
-        if len(plants) > 15:
-            print(f"  ... and {len(plants) - 15} more plants")
-
-    # Find the "super plants" that appear in all 4 lists
-    super_plants = [plant_idx for plant_idx, lists in appearances.items() if len(lists) == 4]
-    if super_plants:
-        print(f"\n{'='*50}")
-        print(f"SUPER PLANTS (appear in all 4 top-{n} lists): {len(super_plants)} plants")
-        print(f"{'='*50}")
-        for plant_idx in super_plants:
-            plant_info = plant_benefits_gdf.loc[plant_idx]
-            hatch = plant_hatch_map[plant_idx]
-            
-            # Get rankings in each list
-            bc_per_mw_rank = list(top_bc_per_mw.index).index(plant_idx) + 1
-            temp_per_mw_rank = list(top_temp_per_mw.index).index(plant_idx) + 1
-            bc_lifetime_rank = list(top_bc_lifetime.index).index(plant_idx) + 1
-            temp_lifetime_rank = list(top_temp_lifetime.index).index(plant_idx) + 1
-            
-            print(f"\nPlant {plant_idx} (Pattern: {hatch}):")
-            print(f"  Country: {plant_info['country']}")
-            print(f"  Capacity: {plant_info['MW']:.1f} MW")
-            print(f"  Rankings: BC per-MW #{bc_per_mw_rank}, Temp per-MW #{temp_per_mw_rank}")
-            print(f"            BC lifetime #{bc_lifetime_rank}, Temp lifetime #{temp_lifetime_rank}")
-            print(f"  BC per-MW: {plant_info['bc_benefit_per_mw']:.2e}")
-            print(f"  Temp per-MW: {plant_info['temp_benefit_per_mw']:.2e}")
-            print(f"  Total BC lifetime: {plant_info['total_bc_benefit_lifetime']:.2e}")
-            print(f"  Total Temp lifetime: {plant_info['total_temp_benefit_lifetime']:.2e}")
-
-
-
-##########################
-def prepare_plant_benefits_data(single_year_ds, CGP_df, n=30, 
-                               impact_var='BC_pop_weight_mean_conc', 
-                               tcr=1.65):
-    """
-    Comprehensive data preparation function for plant benefits analysis.
-    Prepares data for both per-capacity mapping and top-n ranking analysis.
+    Prepare basic plant benefits data for mapping analysis.
     
     Parameters:
     -----------
@@ -4031,16 +3976,16 @@ def prepare_plant_benefits_data(single_year_ds, CGP_df, n=30,
         Single year dataset with plant data
     CGP_df : pandas.DataFrame
         Coal plant dataframe with plant information
-    n : int
-        Number of top plants to analyze per category (default: 30)
     impact_var : str
         Impact variable to analyze (default: 'BC_pop_weight_mean_conc')
     tcr : float
         Transient Climate Response factor (default: 1.65)
+    current_year : int
+        Current year to calculate remaining lifetime from (default: 2025)
         
     Returns:
     --------
-    dict : Dictionary containing all prepared data for both analysis types
+    dict : Dictionary containing prepared data for mapping analysis
     """
     from shapely.geometry import Point
     import geopandas as gpd
@@ -4056,93 +4001,61 @@ def prepare_plant_benefits_data(single_year_ds, CGP_df, n=30,
             # Get plant capacity in MW
             capacity_mw = plant_data['MW'].values.item()
             
-            if capacity_mw > 0:  # Only include plants with capacity
-                # Air quality benefit per MW (ng/m³ per MW)
-                bc_benefit_per_mw = plant_data[impact_var].sum('country_impacted').mean('scenario_year').values.item() / capacity_mw
-                
-                # Temperature benefit per MW
-                # CO2 component - direct marginal calculation
-                co2_emissions_gt = plant_data['co2_emissions'].mean('scenario_year').values.item() / 1e9  # Gt CO2/yr
-                # TCR: approximately 1.65 K per 1000 Gt CO2 (for marginal emissions)
-                co2_temp_k = tcr * co2_emissions_gt / 1000  # K per year from CO2
-                
-                # BC component
-                bc_temp_k = plant_data['dt_sum'].mean('scenario_year').values.item()
-                
-                # Total temperature per MW
-                total_temp_per_mw = (co2_temp_k + bc_temp_k) / capacity_mw
+            # Get year of commission from the dataset
+            year_commissioned = plant_data['Year_of_Commission'].values.item()
+            
+            # Calculate remaining lifetime (assuming 40-year total lifetime)
+            plant_total_lifetime = 40
+            years_operating = current_year - year_commissioned
+            remaining_years = max(0, plant_total_lifetime - years_operating)
+            
+            # Air quality benefit per MW (ng/m³ per MW)
+            bc_benefit_per_mw = plant_data[impact_var].sum('country_impacted').mean('scenario_year').values.item() / capacity_mw
+            
+            # Temperature benefit per MW
+            # CO2 component - direct marginal calculation
+            co2_emissions_gt = plant_data['co2_emissions'].mean('scenario_year').values.item() / 1e9  # Gt CO2/yr
+            # TCR K per 1000 Gt CO2 
+            co2_temp_k = tcr * co2_emissions_gt / 1000  # K per year from CO2
+            
+            # BC component
+            bc_temp_k = plant_data['dt_sum'].mean('scenario_year').values.item()
+            
+            # Total temperature per MW
+            total_temp_per_mw = (co2_temp_k + bc_temp_k) / capacity_mw
 
-                plant_benefits.append({
-                    'unique_ID': unique_id,
-                    'latitude': plant_info['latitude'].iloc[0],
-                    'longitude': plant_info['longitude'].iloc[0],
-                    'country': plant_info['COUNTRY'].iloc[0],
-                    'MW': capacity_mw,  # Use 'MW' to match other functions
-                    'bc_benefit_per_mw': bc_benefit_per_mw,
-                    'temp_benefit_per_mw': total_temp_per_mw
-                })
+            plant_benefits.append({
+                'unique_ID': unique_id,
+                'latitude': plant_info['latitude'].iloc[0],
+                'longitude': plant_info['longitude'].iloc[0],
+                'country': plant_info['COUNTRY'].iloc[0],
+                'MW': capacity_mw,  # Use 'MW' to match other functions
+                'year_commissioned': year_commissioned,
+                'remaining_years': remaining_years,
+                'bc_benefit_per_mw': bc_benefit_per_mw,
+                'temp_benefit_per_mw': total_temp_per_mw
+            })
     
     # Convert to GeoDataFrame
     benefits_df = pd.DataFrame(plant_benefits)
     geometry = [Point(xy) for xy in zip(benefits_df['longitude'], benefits_df['latitude'])]
     gdf_benefits = gpd.GeoDataFrame(benefits_df, geometry=geometry)
     
-    # Calculate median values for categorization
-    median_temp = gdf_benefits['temp_benefit_per_mw'].median()
-    median_bc = gdf_benefits['bc_benefit_per_mw'].median()
-    
-    # Create categorical benefit classification
-    def classify_benefits(row):
-        temp_above_median = row['temp_benefit_per_mw'] > median_temp
-        bc_above_median = row['bc_benefit_per_mw'] > median_bc
-        
-        if temp_above_median and bc_above_median:
-            return 'Above Median (Temperature and Black Carbon)'
-        elif not temp_above_median and not bc_above_median:
-            return 'Below Median (Temperature and Black Carbon)'
-        elif temp_above_median and not bc_above_median:
-            return 'Above Median (Temp)'
-        else:  # bc_above_median and not temp_above_median
-            return 'Above Median (Black Carbon)'
-    
-    gdf_benefits['benefit_category'] = gdf_benefits.apply(classify_benefits, axis=1)
-    
-    # Create country color mapping
-    country_color_map = {
-        'MALAYSIA': '#AAA662',  
-        'CAMBODIA': '#029386',  
-        'INDONESIA': '#FF6347', 
-        'VIETNAM': '#DAA520'    
-    }
-    gdf_benefits['country_color'] = gdf_benefits['country'].map(country_color_map)
-    
-    # Define colors for each category
-    category_colors = {
-        'Above Median (Temperature and Black Carbon)': '#2E8B57',     
-        'Above Median (Black Carbon)': '#CD853F',      
-        'Above Median (Temp)': '#4169E1', 
-        'Below Median (Temperature and Black Carbon)': '#FF6347'    
-    }
-    
-    # ===== ADD LIFETIME CALCULATIONS =====
-    
-    # Calculate total lifetime impacts using the same methodology as per-MW calculations
-    plant_lifetime_years = 40  # Standard plant lifetime
-    
-    # For each plant, get the total BC and temperature benefits using consistent methodology
+    # Calculate total remaining lifetime impacts using the remaining years
     gdf_benefits['total_bc_benefit_lifetime'] = 0.0
     gdf_benefits['total_temp_benefit_lifetime'] = 0.0
 
-    # Calculate lifetime benefits using the same approach as per-MW calculations
+    # Calculate lifetime benefits using remaining years
     for idx, row in gdf_benefits.iterrows():
         plant_id = row['unique_ID']
+        remaining_years = row['remaining_years']
         
         try:
-            plant_data = single_year_ds.sel(unique_ID=plant_id, scenario_year=2025)
+            plant_data = single_year_ds.sel(unique_ID=plant_id, scenario_year=current_year)
             
-            # BC benefit (same as before)
+            # BC benefit over remaining lifetime
             bc_data = plant_data[impact_var].sum('country_impacted')
-            bc_impact = bc_data.item() * plant_lifetime_years
+            bc_impact = bc_data.item() * remaining_years
             
             # Temperature benefit - use same methodology as per-MW calculation
             # CO2 component
@@ -4155,8 +4068,8 @@ def prepare_plant_benefits_data(single_year_ds, CGP_df, n=30,
             # Total temperature impact per year
             total_temp_per_year = co2_temp_k + bc_temp_k
             
-            # Lifetime temperature impact
-            temp_impact = total_temp_per_year * plant_lifetime_years
+            # Remaining lifetime temperature impact
+            temp_impact = total_temp_per_year * remaining_years
             
             gdf_benefits.loc[idx, 'total_bc_benefit_lifetime'] = bc_impact
             gdf_benefits.loc[idx, 'total_temp_benefit_lifetime'] = temp_impact
@@ -4166,76 +4079,12 @@ def prepare_plant_benefits_data(single_year_ds, CGP_df, n=30,
             gdf_benefits.loc[idx, 'total_bc_benefit_lifetime'] = 0.0
             gdf_benefits.loc[idx, 'total_temp_benefit_lifetime'] = 0.0
 
-    # ===== TOP-N ANALYSIS =====
-    
-    # Get top n plants for each category
-    top_bc_per_mw = gdf_benefits.nlargest(n, 'bc_benefit_per_mw')
-    top_temp_per_mw = gdf_benefits.nlargest(n, 'temp_benefit_per_mw')
-    top_bc_lifetime = gdf_benefits.nlargest(n, 'total_bc_benefit_lifetime')
-    top_temp_lifetime = gdf_benefits.nlargest(n, 'total_temp_benefit_lifetime')
-
-    # Get all unique plant indices that appear in any top n list
-    all_top_indices = set()
-    all_top_indices.update(top_bc_per_mw.index)
-    all_top_indices.update(top_temp_per_mw.index)
-    all_top_indices.update(top_bc_lifetime.index)
-    all_top_indices.update(top_temp_lifetime.index)
-
-    # Find plants that appear in multiple lists
-    appearances = {}
-    for plant_idx in all_top_indices:
-        appearances[plant_idx] = []
-        if plant_idx in top_bc_per_mw.index:
-            appearances[plant_idx].append('BC per-MW')
-        if plant_idx in top_temp_per_mw.index:
-            appearances[plant_idx].append('Temp per-MW')
-        if plant_idx in top_bc_lifetime.index:
-            appearances[plant_idx].append('BC lifetime')
-        if plant_idx in top_temp_lifetime.index:
-            appearances[plant_idx].append('Temp lifetime')
-
-    # Only assign hatch patterns to plants that appear in multiple lists
-    multi_list_plants = [plant_idx for plant_idx, lists in appearances.items() if len(lists) > 1]
-
-    # Create a consistent hatch pattern mapping only for plants that appear in multiple lists
-    hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', '...', 'xxx', 
-                    '^^^', '>>>', '<<<', '..', '--', '++', '**', '||', '//', '\\\\','ooo', '***']
-
-    # Extend pattern list if we have more plants than patterns
-    if len(multi_list_plants) > len(hatch_patterns):
-        hatch_patterns = hatch_patterns * (len(multi_list_plants) // len(hatch_patterns) + 1)
-
-    # Create a consistent mapping of plant index to hatch pattern (only for multi-list plants)
-    plant_hatch_map = {}
-    for i, plant_idx in enumerate(sorted(multi_list_plants)):
-        plant_hatch_map[plant_idx] = hatch_patterns[i]
-
-    # Return comprehensive data dictionary
-    return {
-        # Core data
-        'gdf_benefits': gdf_benefits,
-        'country_color_map': country_color_map,
-        'category_colors': category_colors,
-        'median_temp': median_temp,
-        'median_bc': median_bc,
-        'impact_var': impact_var,
-        'tcr': tcr,
-        'plant_lifetime_years': plant_lifetime_years,
-        
-        # Top-n analysis data
-        'top_bc_per_mw': top_bc_per_mw,
-        'top_temp_per_mw': top_temp_per_mw,
-        'top_bc_lifetime': top_bc_lifetime,
-        'top_temp_lifetime': top_temp_lifetime,
-        'all_top_indices': all_top_indices,
-        'appearances': appearances,
-        'multi_list_plants': multi_list_plants,
-        'plant_hatch_map': plant_hatch_map,
-        'n': n
-    }
+    # Return comprehensive data dictionary for mapping
+    return gdf_benefits
 
 
-def plot_plant_benefits_maps(prepared_data, country_df, figsize=(18, 8)):
+
+def plot_plant_benefits_maps(gdf_benefits, country_df, figsize=(18, 8)):
     """
     Create maps showing plant benefits per capacity from prepared data.
     
@@ -4258,12 +4107,13 @@ def plot_plant_benefits_maps(prepared_data, country_df, figsize=(18, 8)):
     from matplotlib.colors import Normalize
     from matplotlib.patches import Patch
     
-    # Unpack data
-    gdf_benefits = prepared_data['gdf_benefits']
-    country_color_map = prepared_data['country_color_map']
-    category_colors = prepared_data['category_colors']
-    median_temp = prepared_data['median_temp']
-    median_bc = prepared_data['median_bc']
+    # Define colors for each category
+    category_colors = {
+        'Above Median (Temperature and Black Carbon)': '#2E8B57',     
+        'Above Median (Black Carbon)': '#CD853F',      
+        'Above Median (Temp)': '#4169E1', 
+        'Below Median (Temperature and Black Carbon)': '#FF6347'    
+    }
     
     # Create the plot with manual positioning to ensure equal sizes
     fig = plt.figure(figsize=figsize)
@@ -4276,6 +4126,16 @@ def plot_plant_benefits_maps(prepared_data, country_df, figsize=(18, 8)):
     ax1 = fig.add_subplot(gs[0])  # Left - BC benefit
     ax2 = fig.add_subplot(gs[1])  # Center - Temperature benefit  
     ax3 = fig.add_subplot(gs[2])  # Right - Categorical benefits
+
+
+     # Add subplot labels using a loop
+    axes = [ax1, ax2, ax3]
+    labels = ['a)', 'b)', 'c)']
+    
+    for ax, label in zip(axes, labels):
+        ax.text(0.02, 0.95, label, transform=ax.transAxes, fontsize=18,
+                 verticalalignment='top')
+
 
     country_fill_color = 'lightgray'
     country_edge_color = 'darkgray'
@@ -4323,6 +4183,27 @@ def plot_plant_benefits_maps(prepared_data, country_df, figsize=(18, 8)):
     # Plot 3: Categorical benefits (third plot)
     country_df.plot(ax=ax3, color=country_fill_color, edgecolor=country_edge_color, alpha=0.4, linewidth=0.5)
 
+    # Calculate median values for categorization
+    median_temp = gdf_benefits['temp_benefit_per_mw'].median()
+    median_bc = gdf_benefits['bc_benefit_per_mw'].median()
+    
+    # Create categorical benefit classification
+    def classify_benefits(row):
+        temp_above_median = row['temp_benefit_per_mw'] > median_temp
+        bc_above_median = row['bc_benefit_per_mw'] > median_bc
+        
+        if temp_above_median and bc_above_median:
+            return 'Above Median (Temperature and Black Carbon)'
+        elif not temp_above_median and not bc_above_median:
+            return 'Below Median (Temperature and Black Carbon)'
+        elif temp_above_median and not bc_above_median:
+            return 'Above Median (Temp)'
+        else:  # bc_above_median and not temp_above_median
+            return 'Above Median (Black Carbon)'
+    
+    gdf_benefits['benefit_category'] = gdf_benefits.apply(classify_benefits, axis=1)
+    
+    
     # Plot categorical data
     for category, color in category_colors.items():
         category_data = gdf_benefits[gdf_benefits['benefit_category'] == category]
@@ -4377,8 +4258,36 @@ def plot_plant_benefits_maps(prepared_data, country_df, figsize=(18, 8)):
     
     return fig
 
+def get_topn(gdf_benefits, n = 30):
+     
+    # Get top n plants for each category
+    top_bc_per_mw = gdf_benefits.nlargest(n, 'bc_benefit_per_mw')
+    top_temp_per_mw = gdf_benefits.nlargest(n, 'temp_benefit_per_mw')
+    top_bc_lifetime = gdf_benefits.nlargest(n, 'total_bc_benefit_lifetime')
+    top_temp_lifetime = gdf_benefits.nlargest(n, 'total_temp_benefit_lifetime')
 
-def plot_plant_benefits_bars(prepared_data, save_path=False):
+    # Get all unique plant indices that appear in any top n list
+    all_top_indices = set()
+    all_top_indices.update(top_bc_per_mw.index)
+    all_top_indices.update(top_temp_per_mw.index)
+    all_top_indices.update(top_bc_lifetime.index)
+    all_top_indices.update(top_temp_lifetime.index)
+
+    # Find plants that appear in multiple lists
+    appearances = {}
+    for plant_idx in all_top_indices:
+        appearances[plant_idx] = []
+        if plant_idx in top_bc_per_mw.index:
+            appearances[plant_idx].append('BC per-MW')
+        if plant_idx in top_temp_per_mw.index:
+            appearances[plant_idx].append('Temp per-MW')
+        if plant_idx in top_bc_lifetime.index:
+            appearances[plant_idx].append('BC lifetime')
+        if plant_idx in top_temp_lifetime.index:
+            appearances[plant_idx].append('Temp lifetime')
+    return top_bc_per_mw, top_temp_per_mw, top_bc_lifetime, top_temp_lifetime, all_top_indices, appearances
+
+def plot_plant_benefits_bars(gdf_benefits, n = 30, save_path=False):
     """
     Create bar plots showing top-n plants by different benefit categories.
     
@@ -4393,26 +4302,48 @@ def plot_plant_benefits_bars(prepared_data, save_path=False):
     --------
     None (displays plot and prints analysis)
     """
-    
-    # Unpack data
-    gdf_benefits = prepared_data['gdf_benefits']
-    top_bc_per_mw = prepared_data['top_bc_per_mw']
-    top_temp_per_mw = prepared_data['top_temp_per_mw']
-    top_bc_lifetime = prepared_data['top_bc_lifetime']
-    top_temp_lifetime = prepared_data['top_temp_lifetime']
-    all_top_indices = prepared_data['all_top_indices']
-    appearances = prepared_data['appearances']
-    multi_list_plants = prepared_data['multi_list_plants']
-    plant_hatch_map = prepared_data['plant_hatch_map']
-    country_color_map = prepared_data['country_color_map']
-    n = prepared_data['n']
+
+    top_bc_per_mw, top_temp_per_mw, top_bc_lifetime, top_temp_lifetime, all_top_indices, appearances = get_topn(gdf_benefits, n)
+
+    # Only assign hatch patterns to plants that appear in multiple lists
+    multi_list_plants = [plant_idx for plant_idx, lists in appearances.items() if len(lists) > 1]
+
+    # Create a consistent hatch pattern mapping only for plants that appear in multiple lists
+    hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', '...', 'xxx', 
+                    '^^^', '>>>', '<<<', '..', '--', '++', '**', '||', '//', '\\\\','ooo', '***']
+
+    # Extend pattern list if we have more plants than patterns
+    if len(multi_list_plants) > len(hatch_patterns):
+        hatch_patterns = hatch_patterns * (len(multi_list_plants) // len(hatch_patterns) + 1)
+
+    # Create a consistent mapping of plant index to hatch pattern (only for multi-list plants)
+    plant_hatch_map = {}
+    for i, plant_idx in enumerate(sorted(multi_list_plants)):
+        plant_hatch_map[plant_idx] = hatch_patterns[i]
     
     # Create the plot
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(22, 16))
-    plt.rcParams['font.size'] = 14
+    plt.rcParams['font.size'] = 12
     
-    # Get country colors
-    countries = gdf_benefits['country'].unique()
+
+    # Add subplot labels using a loop
+    axes = [ax1, ax2, ax3, ax4]
+    labels = ['a)', 'b)', 'c)', 'd)']
+    
+    for ax, label in zip(axes, labels):
+        ax.text(0.95, 0.98, label, transform=ax.transAxes, fontsize=22,
+                 verticalalignment='top')
+
+
+  # Create country color mapping
+    country_color_map = {
+        'MALAYSIA': '#0072B2',  
+        'CAMBODIA': '#009E73',  
+        'INDONESIA': '#D55E00', 
+        'VIETNAM': '#CC79A7'    
+    }
+
+    countries = ['MALAYSIA', 'CAMBODIA', 'INDONESIA', 'VIETNAM']
 
     # Function to get hatch pattern for a plant (returns None if plant appears in only one list)
     def get_plant_hatch(plant_idx):
@@ -4426,10 +4357,11 @@ def plot_plant_benefits_bars(prepared_data, save_path=False):
 
     bars1 = ax1.bar(range(len(top_bc_per_mw)), top_bc_per_mw['bc_benefit_per_mw'], 
                     color=colors_bc_per_mw, alpha=0.8, hatch=hatches_bc_per_mw)
-    ax1.set_xlabel('Plant Rank (Highest to Lowest Impact)')
-    ax1.set_ylabel('BC Benefit per MW (μg/m³/MW)')
-    ax1.set_title(f'Top {n} Plants by BC Benefits per MW')
-    ax1.grid(True, alpha=0.3)
+    #ax1.set_xlabel('Plant Rank (Highest to Lowest Impact)')
+    ax1.set_ylabel('Black Carbon Benefit per MW (ng/m³/MW)')
+    #ax1.set_title(f'Top {n} Plants by Black Carbon Benefits per MW')
+    #ax1.grid(True, alpha=0.3)
+    ax1.set_xticks([])
 
     # Temperature benefits per MW plot (top right)
     colors_temp_per_mw = [country_color_map[country] for country in top_temp_per_mw['country']]
@@ -4437,11 +4369,11 @@ def plot_plant_benefits_bars(prepared_data, save_path=False):
 
     bars2 = ax2.bar(range(len(top_temp_per_mw)), top_temp_per_mw['temp_benefit_per_mw'], 
                     color=colors_temp_per_mw, alpha=0.8, hatch=hatches_temp_per_mw)
-    ax2.set_xlabel('Plant Rank (Highest to Lowest Impact)')
+    #ax2.set_xlabel('Plant Rank (Highest to Lowest Impact)')
     ax2.set_ylabel('Temperature Benefit per MW (K/MW)')
-    ax2.set_title(f'Top {n} Plants by Temperature Benefits per MW')
-    ax2.grid(True, alpha=0.3)
-
+    #ax2.set_title(f'Top {n} Plants by Temperature Benefits per MW')
+    #ax2.grid(True, alpha=0.3)
+    ax2.set_xticks([])
     # BC lifetime benefits plot (bottom left)
     colors_bc_lifetime = [country_color_map[country] for country in top_bc_lifetime['country']]
     hatches_bc_lifetime = [get_plant_hatch(idx) for idx in top_bc_lifetime.index]
@@ -4449,9 +4381,9 @@ def plot_plant_benefits_bars(prepared_data, save_path=False):
     bars3 = ax3.bar(range(len(top_bc_lifetime)), top_bc_lifetime['total_bc_benefit_lifetime'], 
                     color=colors_bc_lifetime, alpha=0.8, hatch=hatches_bc_lifetime)
     ax3.set_xlabel('Plant Rank (Highest to Lowest Impact)')
-    ax3.set_ylabel('Total BC Benefit over 40-year Lifetime (μg/m³·years)')
-    ax3.set_title(f'Top {n} Plants by Total BC Benefits over 40-year Lifetime')
-    ax3.grid(True, alpha=0.3)
+    ax3.set_ylabel('Total Black Carbon Benefit over 40-year Lifetime (ng/m³·years)')
+    #ax3.set_title(f'Top {n} Plants by Total Black Carbon Benefits over 40-year Lifetime')
+    #ax3.grid(True, alpha=0.3)
     ax3.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
 
     # Temperature lifetime benefits plot (bottom right)
@@ -4462,8 +4394,8 @@ def plot_plant_benefits_bars(prepared_data, save_path=False):
                     color=colors_temp_lifetime, alpha=0.8, hatch=hatches_temp_lifetime)
     ax4.set_xlabel('Plant Rank (Highest to Lowest Impact)')
     ax4.set_ylabel('Total Temperature Benefit over 40-year Lifetime (K·years)')
-    ax4.set_title(f'Top {n} Plants by Total Temperature Benefits over 40-year Lifetime')
-    ax4.grid(True, alpha=0.3)
+    #ax4.set_title(f'Top {n} Plants by Total Temperature Benefits over 40-year Lifetime')
+    #ax4.grid(True, alpha=0.3)
     ax4.ticklabel_format(axis='y', style='scientific', scilimits=(0,0))
 
     # ====================== LEGEND ======================
@@ -4472,7 +4404,7 @@ def plot_plant_benefits_bars(prepared_data, save_path=False):
 
     # Add country colors - capitalize only first letter
     for country in countries:
-        country_name = country.capitalize()  # Capitalize only first letter
+        country_name = country.title()  # Capitalize only first letter
         legend_elements.append(plt.Rectangle((0,0),1,1, facecolor=country_color_map[country], 
                                         label=country_name))
 
@@ -4564,3 +4496,142 @@ def plot_plant_benefits_bars(prepared_data, save_path=False):
             print(f"  Total BC lifetime: {plant_info['total_bc_benefit_lifetime']:.2e}")
             print(f"  Total Temp lifetime: {plant_info['total_temp_benefit_lifetime']:.2e}")
 
+def plot_top_plants_maps(gdf_benefits, country_df, n=30, figsize=(20, 12), save_path=None, jitter_amount=0.05):
+    """
+    Create maps showing the top N plants for each benefit metric.
+    Handles overlapping points with jitter and transparency.
+    
+    Parameters:
+    -----------
+    gdf_benefits : GeoDataFrame
+        GeoDataFrame with plant benefits data including geometry (lat/lon points)
+    country_df : GeoDataFrame
+        GeoDataFrame with country boundaries
+    n : int
+        Number of top plants to show (default: 30)
+    figsize : tuple
+        Figure size
+    save_path : str, optional
+        Path to save the figure
+    jitter_amount : float
+        Amount of random jitter to add to coordinates (default: 0.05 degrees)
+        
+    Returns:
+    --------
+    fig, axes : matplotlib figure and axes
+    """
+    import matplotlib.pyplot as plt
+    import geopandas as gpd
+    import numpy as np
+    
+    # Define the four benefit metrics
+    metrics = {
+        'bc_benefit_per_mw': 'Black Carbon Concentration\nDecrease per MW',
+        'temp_benefit_per_mw': 'Temperature\nDecrease per MW',
+        'total_bc_benefit_lifetime': 'Total Black Carbon Concentration\nDecrease over Lifetime',
+        'total_temp_benefit_lifetime': 'Total Temperature\nDecrease over Lifetime'
+    }
+    
+    # Create 2x2 subplot grid
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+    axes = axes.flatten()
+    
+    # Color palette for countries
+    country_colors = {
+        'MALAYSIA': '#0072B2',  
+        'CAMBODIA': '#009E73',  
+        'INDONESIA': '#D55E00', 
+        'VIETNAM': '#CC79A7'    
+    }
+    
+    for idx, (metric, title) in enumerate(metrics.items()):
+        ax = axes[idx]
+        
+        # Plot base map - all countries in light gray
+        country_df.plot(ax=ax, color='lightgray', edgecolor='black', 
+                       linewidth=0.5, alpha=0.3)
+        
+        # Highlight the four countries of interest
+        for country, color in country_colors.items():
+            country_geom = country_df[country_df['country'] == country]
+            if not country_geom.empty:
+                country_geom.plot(ax=ax, color=color, edgecolor='black',
+                                linewidth=0.8, alpha=0.4)
+        
+        # Get top N plants for this metric
+        top_plants = gdf_benefits.nlargest(n, metric).copy()
+        
+        # Add small random jitter to separate overlapping points
+        np.random.seed(42 + idx)  # Different seed for each subplot but reproducible
+        top_plants['lon_jittered'] = top_plants.geometry.x + np.random.uniform(
+            -jitter_amount, jitter_amount, len(top_plants)
+        )
+        top_plants['lat_jittered'] = top_plants.geometry.y + np.random.uniform(
+            -jitter_amount, jitter_amount, len(top_plants)
+        )
+        
+        # Calculate colorbar limits
+        vmin = top_plants[metric].min()
+        vmax = top_plants[metric].max()
+        
+        # Plot top plants as scatter points with jittered coordinates
+        scatter = ax.scatter(
+            top_plants['lon_jittered'],
+            top_plants['lat_jittered'],
+            s=200,  # Marker size
+            c=top_plants[metric],
+            cmap='YlOrRd',
+            edgecolors='black',
+            linewidth=1,
+            zorder=5,
+            alpha=0.7,  # Semi-transparent to see overlapping points
+            vmax=vmax,
+            vmin=vmin
+        )
+        
+        # Add colorbar
+        cbar = plt.colorbar(scatter, ax=ax, shrink=0.8)
+        cbar.set_label(title, fontsize=10)
+        
+        # Format colorbar labels based on magnitude
+        if vmax < 0.01:
+            cbar.ax.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+        
+        # Set map extent to Southeast Asia
+        ax.set_xlim(95, 125)
+        ax.set_ylim(-10, 25)
+        
+        # Add title with count info
+        unique_locs = len(top_plants[['latitude', 'longitude']].drop_duplicates())
+        ax.set_title(f'Top {n} Plants by {title}', 
+                    fontsize=11)
+        
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        
+        # Remove axis labels for cleaner look
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        
+        # Add subplot label
+        subplot_label = chr(ord('a') + idx)
+        ax.text(0.02, 0.98, f'{subplot_label})', transform=ax.transAxes,
+               fontsize=14, verticalalignment='top')
+        
+        # Print statistics for this metric
+        print(f"\n{title}:")
+        print(f"  Total plants: {len(top_plants)}")
+        print(f"  Unique locations: {unique_locs}")
+        print(f"  Value range: {vmin:.2e} - {vmax:.2e}")
+        print(f"  Countries represented:")
+        country_counts = top_plants['country'].value_counts()
+        for country, count in country_counts.items():
+            print(f"    {country}: {count} plants")
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"\nFigure saved to: {save_path}")
+    
+    return fig, axes

@@ -1,0 +1,5 @@
+/tmp/slurmd/job423897/slurm_script: line 13: module: command not found
+Traceback (most recent call last):
+  File "/net/fs11/d0/emfreese/BC-IRF/analysis_plotting/videos_shutdowns.py", line 697, in <module>
+    plant_files = get_plant_file_list(CGP_df, countries)
+NameError: name 'get_plant_file_list' is not defined
